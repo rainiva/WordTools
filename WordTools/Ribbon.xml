@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="Ribbon_Load">
+  <ribbon>
+    <tabs>
+      <!-- Word工具箱选项卡，紧跟在"开始"选项卡之后 -->
+      <tab id="tabWordToolbox" label="Word工具箱" insertAfterMso="TabHome">
+        
+        <!-- 主功能组 -->
+        <group id="grpMainFunctions" label="图片工具">
+          
+          <!-- 批量插图按钮（普通按钮，点击弹出窗体） -->
+          <button id="btnInsertPhotos"
+                  label="批量插图"
+                  screentip="批量插入图片到表格"
+                  supertip="打开批量插图工具窗口，从文件夹或选择的图片文件批量插入到Word表格中，支持自动编号和描述行。"
+                  size="large"
+                  imageMso="PictureInsertFromFile"
+                  onAction="OnInsertPhotosClick"/>
+          
+        </group>
+        
+        <!-- 帮助组 -->
+        <group id="grpHelp" label="帮助">
+          
+          <button id="btnAbout"
+                  label="关于"
+                  screentip="关于Word工具箱"
+                  supertip="显示版本信息和使用说明。"
+                  size="large"
+                  imageMso="Info"
+                  onAction="OnAboutClick"/>
+          
+        </group>
+        
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

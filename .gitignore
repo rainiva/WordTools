@@ -1,0 +1,24 @@
+## Visual Studio 生成的文件
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## 构建输出
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+*.manifest
+*.vsto
+
+## NuGet 包
+packages/
+
+## 其他
+*.log
+*.tmp
+Thumbs.db
+Desktop.ini
