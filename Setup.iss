@@ -2,7 +2,7 @@
 ; 编码: UTF-8 with BOM
 
 #define MyAppName "Word工具箱"
-#define MyAppVersion "1.0.0.0"
+#define MyAppVersion "1.2.0.0"
 #define MyAppPublisher "WordTools"
 #define MyAppProgId "WordTools.ThisAddIn"
 #define MyAppDLL "WordTools.dll"
@@ -32,6 +32,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "WordTools\bin\Debug\{#MyAppDLL}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "WordTools\bin\Debug\Extensibility.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "WordTools\bin\Debug\stdole.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 ; Word Addins 注册表项

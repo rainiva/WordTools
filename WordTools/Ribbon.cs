@@ -98,7 +98,7 @@ namespace WordTools
             {
                 MessageBox.Show(
                     "Word工具箱 v1.0\n\n" +
-                    "功能：批量插图、自动编号\n\n" +
+                    "功能：批量插图、Excel数据填充、自动编号\n\n" +
                     "© 2026 WordTools",
                     "关于",
                     MessageBoxButtons.OK,
@@ -110,14 +110,30 @@ namespace WordTools
             }
         }
 
+        public void OnExcelDataFillerClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                // 打开Excel数据填充窗体
+                Forms.ExcelDataFillerForm form = new Forms.ExcelDataFillerForm();
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("打开Excel数据填充工具失败: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         public string GetLabel(Office.IRibbonControl control)
         {
             switch (control.Id)
             {
                 case "tabWordToolbox": return "Word工具箱";
                 case "grpMainFunctions": return "图片工具";
+                case "grpTools": return "工具";
                 case "grpHelp": return "帮助";
                 case "btnInsertPhotos": return "批量插图";
+                case "btnExcelDataFiller": return "Excel数据填充";
                 case "btnAbout": return "关于";
                 default: return "";
             }
@@ -128,6 +144,7 @@ namespace WordTools
             switch (control.Id)
             {
                 case "btnInsertPhotos": return "批量插入图片到表格";
+                case "btnExcelDataFiller": return "Excel数据批量填充到Word表格";
                 case "btnAbout": return "显示版本信息和使用说明";
                 default: return "";
             }

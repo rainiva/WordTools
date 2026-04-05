@@ -607,30 +607,45 @@ namespace WordTools.Services
 
                 int endRow = Math.Min(lastImageRow + 1, tbl.Rows.Count);
 
-                // 创建自定义列表模板
-                ListTemplate sharedListTemplate = null;
-                bool isFirstDescriptionRow = true;
-
-                // 查找之前的编号
+                // 计算编号起始值：查找 startRow 之前已有的编号，延续编号
+                int numberStartAt = 1;
                 if (startRow > 1)
                 {
                     for (int checkRow = startRow - 1; checkRow >= 1; checkRow--)
                     {
                         try
                         {
-                            if (tbl.Rows[checkRow].Range.ListFormat.ListType != WdListType.wdListNoNumbering)
+                            int checkColCount = tbl.Rows[checkRow].Cells.Count;
+                            if (checkColCount < 2) continue;
+
+                            // 从右往左查找最后一个有编号的单元格，获取其编号值
+                            for (int col = checkColCount; col >= 1; col--)
                             {
-                                sharedListTemplate = tbl.Rows[checkRow].Range.ListFormat.ListTemplate;
-                                isFirstDescriptionRow = false;
-                                break;
+                                try
+                                {
+                                    var cellRange = tbl.Cell(checkRow, col).Range;
+                                    if (cellRange.ListFormat.ListType != WdListType.wdListNoNumbering)
+                                    {
+                                        int listValue = cellRange.ListFormat.ListValue;
+                                        if (listValue > 0)
+                                        {
+                                            numberStartAt = listValue + 1;
+                                        }
+                                        break;
+                                    }
+                                }
+                                catch { }
                             }
+
+                            if (numberStartAt > 1) break;
                         }
-                        catch
-                        {
-                            // 忽略错误
-                        }
+                        catch { }
                     }
                 }
+
+                // 创建自定义列表模板
+                ListTemplate sharedListTemplate = null;
+                bool isFirstDescriptionRow = true;
 
                 // 遍历并添加编号
                 for (int rowIdx = startRow; rowIdx <= endRow; rowIdx++)
@@ -668,34 +683,19 @@ namespace WordTools.Services
 
                                 if (isFirstDescriptionRow)
                                 {
-                                    if (startRow == 1)
-                                    {
-                                        // 创建新列表模板
-                                        var customListTemplate = doc.ListTemplates.Add(true);
-                                        var level = customListTemplate.ListLevels[1];
-                                        level.NumberFormat = "%1.";
-                                        level.TrailingCharacter = WdTrailingCharacter.wdTrailingTab;
-                                        level.NumberStyle = WdListNumberStyle.wdListNumberStyleArabic;
-                                        level.StartAt = 1;
+                                    // 创建新列表模板，使用计算的起始编号值
+                                    var customListTemplate = doc.ListTemplates.Add(true);
+                                    var level = customListTemplate.ListLevels[1];
+                                    level.NumberFormat = "%1.";
+                                    level.TrailingCharacter = WdTrailingCharacter.wdTrailingTab;
+                                    level.NumberStyle = WdListNumberStyle.wdListNumberStyleArabic;
+                                    level.StartAt = numberStartAt;
 
-                                        rowRange.ListFormat.ApplyListTemplate(
-                                            customListTemplate, 
-                                            ContinuePreviousList: false, 
-                                            ApplyTo: WdListApplyTo.wdListApplyToWholeList);
-                                        sharedListTemplate = customListTemplate;
-                                    }
-                                    else if (sharedListTemplate == null)
-                                    {
-                                        rowRange.ListFormat.ApplyNumberDefault();
-                                        sharedListTemplate = rowRange.ListFormat.ListTemplate;
-                                    }
-                                    else
-                                    {
-                                        rowRange.ListFormat.ApplyListTemplate(
-                                            sharedListTemplate,
-                                            ContinuePreviousList: true,
-                                            ApplyTo: WdListApplyTo.wdListApplyToWholeList);
-                                    }
+                                    rowRange.ListFormat.ApplyListTemplate(
+                                        customListTemplate, 
+                                        ContinuePreviousList: false, 
+                                        ApplyTo: WdListApplyTo.wdListApplyToWholeList);
+                                    sharedListTemplate = customListTemplate;
                                     isFirstDescriptionRow = false;
                                 }
                                 else if (sharedListTemplate != null)

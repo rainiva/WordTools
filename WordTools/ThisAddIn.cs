@@ -38,6 +38,7 @@ namespace WordTools
         {
             Globals.ThisAddIn = this;
             Globals.Application = (Word.Application)Application;
+            this.Application = (Word.Application)Application;
             ThisAddIn_Startup(this, EventArgs.Empty);
         }
 
@@ -121,6 +122,23 @@ namespace WordTools
                 "关于",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+
+        /// <summary>
+        /// Excel数据填充按钮点击
+        /// </summary>
+        public void OnExcelDataFillerClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                Forms.ExcelDataFillerForm form = new Forms.ExcelDataFillerForm();
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("打开Excel数据填充工具失败: {0}", ex.Message),
+                               "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         #endregion

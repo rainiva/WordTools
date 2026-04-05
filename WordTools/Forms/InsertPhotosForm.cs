@@ -9,6 +9,7 @@ using RadioButton = System.Windows.Forms.RadioButton;
 using TextBox = System.Windows.Forms.TextBox;
 using Button = System.Windows.Forms.Button;
 using Label = System.Windows.Forms.Label;
+using Theme = WordTools.Theme;
 
 namespace WordTools.Forms
 {
@@ -35,19 +36,15 @@ namespace WordTools.Forms
         private RadioButton optAlignLeft;
         private RadioButton optAlignCenter;
 
-        // 颜色方案
-        private static readonly Color COLOR_BG = Color.FromArgb(245, 245, 245);
-        private static readonly Color COLOR_PRIMARY = Color.FromArgb(74, 120, 217);
-        private static readonly Color COLOR_SUCCESS = Color.FromArgb(92, 184, 92);
-        private static readonly Color COLOR_TEXT_PRIMARY = Color.FromArgb(51, 51, 51);
-        private static readonly Color COLOR_TEXT_SECONDARY = Color.FromArgb(85, 85, 85);
-        private static readonly Color COLOR_DIVIDER = Color.FromArgb(204, 204, 204);
+        // DPI 缩放
+        private float dpiScale;
+        private int S(int value) { return Theme.Scale(value, dpiScale); }
 
-        // 布局常量
-        private const int MARGIN = 15;
-        private const int GAP = 12;
-        private const int LINE_HEIGHT = 25;
-        private const int BUTTON_HEIGHT = 30;
+        // 预计算布局常量
+        private int MARGIN;
+        private int CTRL_HEIGHT;
+        private int LINE_SPACING;
+        private int FORM_WIDTH;
 
         public InsertPhotosForm(Application application)
         {
@@ -60,20 +57,18 @@ namespace WordTools.Forms
         {
             this.SuspendLayout();
 
-            // 启用 DPI 缩放
-            this.AutoScaleMode = AutoScaleMode.Dpi;
-            this.AutoScaleDimensions = new SizeF(96F, 96F);
+            // 应用 DPI 缩放和窗体默认样式
+            dpiScale = Theme.ApplyFormDefaults(this);
+
+            // 预计算布局常量
+            MARGIN = S(Theme.Layout.Margin);
+            CTRL_HEIGHT = S(Theme.Layout.CtrlHeight);
+            LINE_SPACING = S(Theme.Layout.LineSpacing);
+            FORM_WIDTH = S(Theme.Layout.FormWidthSmall);
 
             // 窗体属性
             this.Text = "批量插图工具";
-            this.Size = new Size(500, 320);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = COLOR_BG;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.ShowIcon = false;
-            this.ShowInTaskbar = false;
+            this.ClientSize = new Size(FORM_WIDTH, S(320));
 
             int currentTop = MARGIN;
 
@@ -99,7 +94,7 @@ namespace WordTools.Forms
             CreateActionButtonsRow(ref currentTop);
 
             // 调整窗体高度
-            this.ClientSize = new Size(480, currentTop + MARGIN);
+            this.ClientSize = new Size(FORM_WIDTH, currentTop + MARGIN);
 
             this.ResumeLayout(false);
         }
@@ -108,88 +103,79 @@ namespace WordTools.Forms
 
         private void CreateFolderPathRow(ref int topPos)
         {
-            // 标签
+            // 标签（高度与输入框一致，文字垂直居中）
             var lblFolder = new Label
             {
                 Text = "文件夹:",
-                Location = new System.Drawing.Point(15, topPos + 4),
-                Size = new Size(55, 18),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_SECONDARY
+                Location = new System.Drawing.Point(S(15), topPos),
+                Size = new Size(S(55), CTRL_HEIGHT),
+                Font = Theme.Fonts.Bold,
+                ForeColor = Theme.Colors.Text,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
             this.Controls.Add(lblFolder);
 
-            // 文本框
-            txtFolderPath = new TextBox
-            {
-                Location = new System.Drawing.Point(75, topPos),
-                Size = new Size(300, LINE_HEIGHT),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F)
-            };
+            // 文本框（使用单行模式，恢复默认样式）
+            txtFolderPath = Theme.CreateTextBox();
+            txtFolderPath.Location = new System.Drawing.Point(S(75), topPos);
+            txtFolderPath.Size = new Size(S(300), CTRL_HEIGHT);
+            Theme.CenterTextVertically(txtFolderPath);
             this.Controls.Add(txtFolderPath);
 
-            // 浏览按钮
-            btnBrowseFolder = new Button
-            {
-                Text = "浏览...",
-                Location = new System.Drawing.Point(385, topPos),
-                Size = new Size(75, LINE_HEIGHT),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(224, 224, 224),
-                ForeColor = COLOR_TEXT_PRIMARY,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                Cursor = Cursors.Hand
-            };
-            btnBrowseFolder.FlatAppearance.BorderColor = COLOR_DIVIDER;
+            // 浏览按钮（高度与文本框自动高度对齐）
+            btnBrowseFolder = Theme.CreateButton("浏览...", Theme.ButtonStyle.Default);
+            btnBrowseFolder.Location = new System.Drawing.Point(S(385), topPos);
+            btnBrowseFolder.Size = new Size(S(75), CTRL_HEIGHT);
             btnBrowseFolder.Click += BtnBrowseFolder_Click;
             this.Controls.Add(btnBrowseFolder);
 
-            topPos += 38;
+            topPos += LINE_SPACING;
         }
 
         private void CreateHeightAndScopeRow(ref int topPos)
         {
-            // 高度标签
+            // 高度标签（高度与输入框一致，文字垂直居中）
             var lblHeight = new Label
             {
                 Text = "高度:",
-                Location = new System.Drawing.Point(15, topPos + 4),
-                Size = new Size(42, 18),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_SECONDARY
+                Location = new System.Drawing.Point(S(15), topPos),
+                Size = new Size(S(42), CTRL_HEIGHT),
+                Font = Theme.Fonts.Bold,
+                ForeColor = Theme.Colors.Text,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
             this.Controls.Add(lblHeight);
 
-            // 高度文本框
-            txtImageHeight = new TextBox
-            {
-                Text = "",
-                Location = new System.Drawing.Point(75, topPos),
-                Size = new Size(55, LINE_HEIGHT),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                TextAlign = HorizontalAlignment.Center
-            };
+            // 高度文本框（使用单行模式，恢复默认样式）
+            txtImageHeight = Theme.CreateTextBox(HorizontalAlignment.Center);
+            txtImageHeight.Text = "";
+            txtImageHeight.Location = new System.Drawing.Point(S(75), topPos);
+            txtImageHeight.Size = new Size(S(80), CTRL_HEIGHT);
+            txtImageHeight.TextAlign = HorizontalAlignment.Center;
+            Theme.CenterTextVertically(txtImageHeight);
             this.Controls.Add(txtImageHeight);
 
-            // 单位标签
+            // 单位标签（高度与输入框一致，文字垂直居中）
             var lblUnit = new Label
             {
                 Text = "cm",
-                Location = new System.Drawing.Point(135, topPos + 4),
-                Size = new Size(25, 18),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = Color.FromArgb(119, 119, 119)
+                Location = new System.Drawing.Point(S(160), topPos),
+                Size = new Size(S(25), CTRL_HEIGHT),
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.TextLight,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
             this.Controls.Add(lblUnit);
 
-            // 范围标签
+            // 范围标签（高度与输入框一致，文字垂直居中）
             var lblScope = new Label
             {
                 Text = "范围:",
-                Location = new System.Drawing.Point(185, topPos + 4),
-                Size = new Size(42, 18),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_SECONDARY
+                Location = new System.Drawing.Point(S(200), topPos),
+                Size = new Size(S(42), CTRL_HEIGHT),
+                Font = Theme.Fonts.Bold,
+                ForeColor = Theme.Colors.Text,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
             this.Controls.Add(lblScope);
 
@@ -197,11 +183,11 @@ namespace WordTools.Forms
             chkIncludeRoot = new CheckBox
             {
                 Text = "根目录",
-                Location = new System.Drawing.Point(230, topPos + 1),
-                Size = new Size(75, 20),
+                Location = new System.Drawing.Point(S(248), topPos),
+                Size = new Size(S(75), CTRL_HEIGHT),
                 Checked = true,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             this.Controls.Add(chkIncludeRoot);
 
@@ -209,49 +195,45 @@ namespace WordTools.Forms
             chkIncludeSubFolder = new CheckBox
             {
                 Text = "子目录",
-                Location = new System.Drawing.Point(315, topPos + 1),
-                Size = new Size(75, 20),
+                Location = new System.Drawing.Point(S(330), topPos),
+                Size = new Size(S(75), CTRL_HEIGHT),
                 Checked = true,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             this.Controls.Add(chkIncludeSubFolder);
 
-            topPos += 35;
+            topPos += S(Theme.Layout.CtrlHeight + Theme.Layout.DividerPaddingTop);
         }
 
         private void CreateDivider(ref int topPos)
         {
-            var divider = new Label
-            {
-                Location = new System.Drawing.Point(MARGIN, topPos),
-                Size = new Size(450, 1),
-                BackColor = COLOR_DIVIDER,
-                BorderStyle = BorderStyle.None
-            };
+            var divider = Theme.CreateDivider(FORM_WIDTH - MARGIN * 2);
+            divider.Location = new System.Drawing.Point(MARGIN, topPos);
             this.Controls.Add(divider);
-            topPos += GAP;
+            topPos += 1 + S(Theme.Layout.DividerPaddingBottom);
         }
 
         private void CreateDescriptionOptionsRow(ref int topPos)
         {
-            // 描述标签
+            // 描述标签（高度与输入框一致，文字垂直居中）
             var lblDesc = new Label
             {
                 Text = "描述:",
-                Location = new System.Drawing.Point(15, topPos + 2),
-                Size = new Size(42, 18),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_SECONDARY
+                Location = new System.Drawing.Point(S(15), topPos),
+                Size = new Size(S(42), CTRL_HEIGHT),
+                Font = Theme.Fonts.Bold,
+                ForeColor = Theme.Colors.Text,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
             this.Controls.Add(lblDesc);
 
             // 用 Panel 包裹描述选项的 RadioButton
             var pnlDescription = new Panel
             {
-                Location = new System.Drawing.Point(70, topPos - 2),
-                Size = new Size(210, 24),
-                BackColor = COLOR_BG
+                Location = new System.Drawing.Point(S(70), topPos),
+                Size = new Size(S(210), CTRL_HEIGHT),
+                BackColor = Theme.Colors.Background
             };
             this.Controls.Add(pnlDescription);
 
@@ -259,11 +241,11 @@ namespace WordTools.Forms
             optNeedDescription = new RadioButton
             {
                 Text = "手动",
-                Location = new System.Drawing.Point(5, 2),
-                Size = new Size(60, 20),
+                Location = new System.Drawing.Point(S(5), (CTRL_HEIGHT - S(20)) / 2),
+                Size = new Size(S(60), S(20)),
                 Checked = true,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             optNeedDescription.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optNeedDescription);
@@ -272,10 +254,10 @@ namespace WordTools.Forms
             optNoDescription = new RadioButton
             {
                 Text = "无",
-                Location = new System.Drawing.Point(70, 2),
-                Size = new Size(50, 20),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Location = new System.Drawing.Point(S(70), (S(Theme.Layout.CtrlHeight) - S(20)) / 2),
+                Size = new Size(S(50), S(20)),
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             optNoDescription.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optNoDescription);
@@ -284,10 +266,10 @@ namespace WordTools.Forms
             optUseFilename = new RadioButton
             {
                 Text = "文件名",
-                Location = new System.Drawing.Point(125, 2),
-                Size = new Size(75, 20),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Location = new System.Drawing.Point(S(125), (S(Theme.Layout.CtrlHeight) - S(20)) / 2),
+                Size = new Size(S(75), S(20)),
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             optUseFilename.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optUseFilename);
@@ -296,36 +278,37 @@ namespace WordTools.Forms
             chkAutoNumbering = new CheckBox
             {
                 Text = "自动编号",
-                Location = new System.Drawing.Point(285, topPos + 1),
-                Size = new Size(90, 20),
+                Location = new System.Drawing.Point(S(285), topPos),
+                Size = new Size(S(90), CTRL_HEIGHT),
                 Enabled = true, // 手动模式下启用
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             this.Controls.Add(chkAutoNumbering);
 
-            topPos += 32;
+            topPos += LINE_SPACING;
         }
 
         private void CreateAlignmentOptionsRow(ref int topPos)
         {
-            // 对齐标签
+            // 对齐标签（高度与输入框一致，文字垂直居中）
             var lblAlign = new Label
             {
                 Text = "对齐:",
-                Location = new System.Drawing.Point(15, topPos + 2),
-                Size = new Size(42, 18),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = COLOR_TEXT_SECONDARY
+                Location = new System.Drawing.Point(S(15), topPos),
+                Size = new Size(S(42), CTRL_HEIGHT),
+                Font = Theme.Fonts.Bold,
+                ForeColor = Theme.Colors.Text,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
             };
             this.Controls.Add(lblAlign);
 
             // 用 Panel 包裹对齐选项，使其与描述选项的 RadioButton 互不影响
             var pnlAlignment = new Panel
             {
-                Location = new System.Drawing.Point(70, topPos - 2),
-                Size = new Size(200, 24),
-                BackColor = COLOR_BG
+                Location = new System.Drawing.Point(S(70), topPos),
+                Size = new Size(S(200), CTRL_HEIGHT),
+                BackColor = Theme.Colors.Background
             };
             this.Controls.Add(pnlAlignment);
 
@@ -333,10 +316,10 @@ namespace WordTools.Forms
             optAlignLeft = new RadioButton
             {
                 Text = "靠左",
-                Location = new System.Drawing.Point(5, 2),
-                Size = new Size(60, 20),
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Location = new System.Drawing.Point(S(5), (CTRL_HEIGHT - S(20)) / 2),
+                Size = new Size(S(60), S(20)),
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             pnlAlignment.Controls.Add(optAlignLeft);
 
@@ -344,68 +327,41 @@ namespace WordTools.Forms
             optAlignCenter = new RadioButton
             {
                 Text = "居中",
-                Location = new System.Drawing.Point(70, 2),
-                Size = new Size(60, 20),
+                Location = new System.Drawing.Point(S(70), (S(Theme.Layout.CtrlHeight) - S(20)) / 2),
+                Size = new Size(S(60), S(20)),
                 Checked = true,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F),
-                ForeColor = COLOR_TEXT_PRIMARY
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
             };
             pnlAlignment.Controls.Add(optAlignCenter);
 
-            topPos += 32;
+            topPos += LINE_SPACING;
         }
 
         private void CreateActionButtonsRow(ref int topPos)
         {
             // 插入文件夹按钮
-            btnInsertFromFolder = new Button
-            {
-                Text = "插入文件夹",
-                Location = new System.Drawing.Point(15, topPos),
-                Size = new Size(100, BUTTON_HEIGHT),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = COLOR_SUCCESS,
-                ForeColor = Color.White,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btnInsertFromFolder.FlatAppearance.BorderSize = 0;
+            btnInsertFromFolder = Theme.CreateButton("插入文件夹", Theme.ButtonStyle.Success);
+            btnInsertFromFolder.Location = new System.Drawing.Point(S(15), topPos);
+            btnInsertFromFolder.Size = new Size(S(100), CTRL_HEIGHT);
             btnInsertFromFolder.Click += BtnInsertFromFolder_Click;
             this.Controls.Add(btnInsertFromFolder);
 
             // 选择文件按钮
-            btnSelectFiles = new Button
-            {
-                Text = "选择文件",
-                Location = new System.Drawing.Point(125, topPos),
-                Size = new Size(100, BUTTON_HEIGHT),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = COLOR_PRIMARY,
-                ForeColor = Color.White,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btnSelectFiles.FlatAppearance.BorderSize = 0;
+            btnSelectFiles = Theme.CreateButton("选择文件", Theme.ButtonStyle.Primary);
+            btnSelectFiles.Location = new System.Drawing.Point(S(125), topPos);
+            btnSelectFiles.Size = new Size(S(100), CTRL_HEIGHT);
             btnSelectFiles.Click += BtnSelectFiles_Click;
             this.Controls.Add(btnSelectFiles);
 
             // 取消按钮（靠右对齐）
-            btnCancel = new Button
-            {
-                Text = "取消",
-                Location = new System.Drawing.Point(380, topPos),
-                Size = new Size(80, BUTTON_HEIGHT),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(224, 224, 224),
-                ForeColor = COLOR_TEXT_PRIMARY,
-                Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                DialogResult = DialogResult.Cancel
-            };
-            btnCancel.FlatAppearance.BorderColor = COLOR_DIVIDER;
+            btnCancel = Theme.CreateButton("取消", Theme.ButtonStyle.Default);
+            btnCancel.Location = new System.Drawing.Point(S(380), topPos);
+            btnCancel.Size = new Size(S(80), CTRL_HEIGHT);
+            btnCancel.DialogResult = DialogResult.Cancel;
             this.Controls.Add(btnCancel);
 
-            topPos += BUTTON_HEIGHT + 10;
+            topPos += LINE_SPACING;
         }
 
         #endregion
@@ -497,12 +453,12 @@ namespace WordTools.Forms
             {
                 chkAutoNumbering.Enabled = false;
                 chkAutoNumbering.Checked = false;
-                chkAutoNumbering.ForeColor = Color.FromArgb(153, 153, 153);
+                chkAutoNumbering.ForeColor = Theme.Colors.TextDisabled;
             }
             else
             {
                 chkAutoNumbering.Enabled = true;
-                chkAutoNumbering.ForeColor = COLOR_TEXT_PRIMARY;
+                chkAutoNumbering.ForeColor = Theme.Colors.Text;
             }
         }
 

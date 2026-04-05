@@ -115,7 +115,11 @@
     <Compile Include="Services\ImageService.cs" />
     <Compile Include="Services\TableService.cs" />
     <Compile Include="Services\ProgressService.cs" />
+    <Compile Include="Services\EDF_DataFillerService.cs" />
+    <Compile Include="Services\EDF_TemplateDetector.cs" />
     <Compile Include="Forms\InsertPhotosForm.cs" />
+    <Compile Include="Forms\ExcelDataFillerForm.cs" />
+    <Compile Include="Theme.cs" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

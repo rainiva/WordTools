@@ -19,6 +19,20 @@
           
         </group>
         
+        <!-- 工具组 -->
+        <group id="grpTools" label="工具">
+          
+          <!-- Excel数据填充按钮 -->
+          <button id="btnExcelDataFiller"
+                  label="Excel数据填充"
+                  screentip="Excel数据批量填充到Word表格"
+                  supertip="从Excel文件读取数据，智能识别Word表格结构，自动匹配并填充数据到表格中。支持多种表格模板和Sample Size替换。"
+                  size="large"
+                  imageMso="TableExcelSpreadsheetInsert"
+                  onAction="OnExcelDataFillerClick"/>
+          
+        </group>
+        
         <!-- 帮助组 -->
         <group id="grpHelp" label="帮助">
           

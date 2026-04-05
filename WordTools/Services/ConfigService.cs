@@ -357,5 +357,106 @@ namespace WordTools.Services
         }
 
         #endregion
+
+        #region Excel数据填充配置
+
+        private const string CONFIG_KEY_EDF_EXCEL_PATH = "EDF_ExcelPath";
+        private const string CONFIG_KEY_EDF_ANCHOR_FIELD = "EDF_AnchorField";
+        private const string CONFIG_KEY_EDF_TARGET_COLUMN = "EDF_TargetColumn";
+        private const string CONFIG_KEY_EDF_SAMPLE_SIZE_COLUMN = "EDF_SampleSizeColumn";
+        private const string CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE = "EDF_ReplaceSampleSize";
+
+        /// <summary>获取Excel文件路径</summary>
+        public static string GetEdfExcelPath(Document doc = null)
+        {
+            if (doc != null)
+            {
+                var value = GetDocumentProperty(doc, CONFIG_KEY_EDF_EXCEL_PATH);
+                if (!string.IsNullOrEmpty(value)) return value == "__EMPTY__" ? "" : value;
+            }
+            var regValue = GetRegistryValue(CONFIG_KEY_EDF_EXCEL_PATH, "");
+            return regValue == "__EMPTY__" ? "" : regValue;
+        }
+
+        /// <summary>保存Excel文件路径</summary>
+        public static void SaveEdfExcelPath(string path, Document doc = null)
+        {
+            string saveValue = string.IsNullOrEmpty(path) ? "__EMPTY__" : path;
+            if (doc != null) SetDocumentProperty(doc, CONFIG_KEY_EDF_EXCEL_PATH, saveValue);
+            SetRegistryValue(CONFIG_KEY_EDF_EXCEL_PATH, saveValue);
+        }
+
+        /// <summary>获取锚定字段</summary>
+        public static string GetEdfAnchorField(Document doc = null)
+        {
+            if (doc != null)
+            {
+                var value = GetDocumentProperty(doc, CONFIG_KEY_EDF_ANCHOR_FIELD);
+                if (!string.IsNullOrEmpty(value)) return value;
+            }
+            return GetRegistryValue(CONFIG_KEY_EDF_ANCHOR_FIELD, "Item No.:");
+        }
+
+        /// <summary>保存锚定字段</summary>
+        public static void SaveEdfAnchorField(string value, Document doc = null)
+        {
+            if (doc != null) SetDocumentProperty(doc, CONFIG_KEY_EDF_ANCHOR_FIELD, value);
+            SetRegistryValue(CONFIG_KEY_EDF_ANCHOR_FIELD, value);
+        }
+
+        /// <summary>获取目标列</summary>
+        public static string GetEdfTargetColumn(Document doc = null)
+        {
+            if (doc != null)
+            {
+                var value = GetDocumentProperty(doc, CONFIG_KEY_EDF_TARGET_COLUMN);
+                if (!string.IsNullOrEmpty(value)) return value;
+            }
+            return GetRegistryValue(CONFIG_KEY_EDF_TARGET_COLUMN, "2");
+        }
+
+        /// <summary>保存目标列</summary>
+        public static void SaveEdfTargetColumn(string value, Document doc = null)
+        {
+            if (doc != null) SetDocumentProperty(doc, CONFIG_KEY_EDF_TARGET_COLUMN, value);
+            SetRegistryValue(CONFIG_KEY_EDF_TARGET_COLUMN, value);
+        }
+
+        /// <summary>获取Sample Size所在列</summary>
+        public static string GetEdfSampleSizeColumn(Document doc = null)
+        {
+            if (doc != null)
+            {
+                var value = GetDocumentProperty(doc, CONFIG_KEY_EDF_SAMPLE_SIZE_COLUMN);
+                if (!string.IsNullOrEmpty(value)) return value;
+            }
+            return GetRegistryValue(CONFIG_KEY_EDF_SAMPLE_SIZE_COLUMN, "B");
+        }
+
+        /// <summary>保存Sample Size所在列</summary>
+        public static void SaveEdfSampleSizeColumn(string value, Document doc = null)
+        {
+            if (doc != null) SetDocumentProperty(doc, CONFIG_KEY_EDF_SAMPLE_SIZE_COLUMN, value);
+            SetRegistryValue(CONFIG_KEY_EDF_SAMPLE_SIZE_COLUMN, value);
+        }
+
+        /// <summary>获取是否替换Sample Size</summary>
+        public static bool GetEdfReplaceSampleSize(Document doc = null)
+        {
+            var value = doc != null
+                ? GetDocumentProperty(doc, CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE)
+                : GetRegistryValue(CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE);
+            return value == "True";
+        }
+
+        /// <summary>保存是否替换Sample Size</summary>
+        public static void SaveEdfReplaceSampleSize(bool value, Document doc = null)
+        {
+            var strValue = value ? "True" : "False";
+            if (doc != null) SetDocumentProperty(doc, CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE, strValue);
+            SetRegistryValue(CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE, strValue);
+        }
+
+        #endregion
     }
 }
