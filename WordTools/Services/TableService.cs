@@ -691,79 +691,54 @@ namespace WordTools.Services
                 int colCount = tbl.Columns.Count;
                 int totalRows = tbl.Rows.Count;
 
-                // 计算进度更新间隔
-                int progressInterval = totalRows < 50 ? 5 : (totalRows < 200 ? 10 : 20);
+                // === 计算进度里程碑 ===
+                int totalToProcess = totalRows - startRow + 1;
+                int milestone25 = startRow + totalToProcess / 4;
+                int milestone50 = startRow + totalToProcess / 2;
+                int milestone75 = startRow + totalToProcess * 3 / 4;
+                bool reported25 = false, reported50 = false, reported75 = false;
 
-                // 单遍扫描 + 编号
-                // 初始化：检查 startRow-1 行是否有图片（确保 startRow 处的描述行能被正确识别）
-                bool prevRowHasImages = false;
-                if (startRow > 1)
+                // === 第一遍：预扫描所有行的图片状态 ===
+                bool[] rowHasImages = new bool[totalRows + 1]; // 索引0不用
+
+                // 需要从 startRow-1 开始扫描（因为判断描述行需要知道前一行是否有图片）
+                int scanStart = Math.Max(1, startRow - 1);
+                for (int rowIdx = scanStart; rowIdx <= totalRows; rowIdx++)
                 {
                     try
                     {
-                        int prevRow = startRow - 1;
-                        // 检查前一行是否为合并行
-                        bool prevIsMerged = false;
-                        try { prevIsMerged = tbl.Rows[prevRow].Cells.Count < colCount; }
-                        catch { prevIsMerged = true; }
+                        // 跳过合并行
+                        if (tbl.Rows[rowIdx].Cells.Count < colCount) continue;
 
-                        if (!prevIsMerged)
-                        {
-                            for (int c = 1; c <= colCount; c++)
-                            {
-                                try
-                                {
-                                    if (tbl.Cell(prevRow, c).Range.InlineShapes.Count > 0)
-                                    {
-                                        prevRowHasImages = true;
-                                        break;
-                                    }
-                                }
-                                catch { }
-                            }
-                        }
-                    }
-                    catch { }
-                }
-
-                for (int rowIdx = startRow; rowIdx <= totalRows; rowIdx++)
-                {
-                    try
-                    {
-                        // 跳过合并单元格行（如文件夹名称标题行）
-                        bool isMergedRow = false;
-                        try
-                        {
-                            if (tbl.Rows[rowIdx].Cells.Count < colCount)
-                            {
-                                isMergedRow = true;
-                            }
-                        }
-                        catch { isMergedRow = true; }
-
-                        if (isMergedRow)
-                        {
-                            prevRowHasImages = false;
-                            continue;
-                        }
-
-                        // 检查当前行是否有图片（找到第一个就 break）
-                        bool currentRowHasImages = false;
                         for (int c = 1; c <= colCount; c++)
                         {
                             try
                             {
                                 if (tbl.Cell(rowIdx, c).Range.InlineShapes.Count > 0)
                                 {
-                                    currentRowHasImages = true;
-                                    break;  // 找到一个就够了
+                                    rowHasImages[rowIdx] = true;
+                                    break; // 找到一个有图片的列就够了
                                 }
                             }
                             catch { }
                         }
+                    }
+                    catch { }
+                }
 
-                        // 判断是否为描述行：前一行有图片 且 当前行无图片
-                        if (!currentRowHasImages && prevRowHasImages)
+                // === 第二遍：编号 ===
+                for (int rowIdx = startRow; rowIdx <= totalRows; rowIdx++)
+                {
+                    try
+                    {
+                        // 跳过合并行
+                        if (tbl.Rows[rowIdx].Cells.Count < colCount) continue;
+
+                        bool currentRowHasImages = rowHasImages[rowIdx];
+                        bool prevHasImages = rowIdx > 1 ? rowHasImages[rowIdx - 1] : false;
+
+                        // 描述行条件：当前行无图片，前一行有图片
+                        if (!currentRowHasImages && prevHasImages)
                         {
                             // 为描述行的每个单元格插入 SEQ 域
                             for (int colIdx = 1; colIdx <= colCount; colIdx++)
@@ -776,18 +751,27 @@ namespace WordTools.Services
                             }
                         }
 
-                        prevRowHasImages = currentRowHasImages;
-
-                        // 进度回调
-                        if (progressCallback != null && (rowIdx - startRow) % progressInterval == 0)
+                        // 里程碑进度回调
+                        if (progressCallback != null)
                         {
-                            progressCallback($"正在添加编号... ({rowIdx}/{totalRows})");
+                            if (!reported25 && rowIdx >= milestone25)
+                            {
+                                progressCallback("正在编号... 25%");
+                                reported25 = true;
+                            }
+                            else if (!reported50 && rowIdx >= milestone50)
+                            {
+                                progressCallback("正在编号... 50%");
+                                reported50 = true;
+                            }
+                            else if (!reported75 && rowIdx >= milestone75)
+                            {
+                                progressCallback("正在编号... 75%");
+                                reported75 = true;
+                            }
                         }
                     }
-                    catch
-                    {
-                        prevRowHasImages = false;
-                    }
+                    catch { }
                 }
 
                 // 更新域：增量模式只更新 startRow 之后的范围
@@ -807,6 +791,9 @@ namespace WordTools.Services
                     }
                 }
                 catch { }
+
+                // 编号完成 100%
+                progressCallback?.Invoke("编号完成 100%");
             }
             catch
             {
@@ -908,57 +895,52 @@ namespace WordTools.Services
         {
             try
             {
-                // 1. 获取并读取现有文本
-                Range readRange = tbl.Cell(rowIdx, colIdx).Range;
-                readRange.SetRange(readRange.Start, readRange.End - 1);
-                string existingText = CleanCellText(readRange.Text);
+                // 1. 获取Range，读取现有文本
+                Range cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                cellRange.SetRange(cellRange.Start, cellRange.End - 1);
+                string existingText = CleanCellText(cellRange.Text);
 
-                // 2. 清理编号前缀，只保留文件名
+                // 清理已有编号前缀（如 "1. ", "2) "）
                 if (!string.IsNullOrEmpty(existingText))
                 {
                     existingText = Regex.Replace(existingText, @"^\d+[.)]+\s*", "");
-                    existingText = existingText.TrimStart('.', ' ');
                 }
 
-                // 3. 清空单元格内容（必须重新获取 Range）
-                Range clearRange = tbl.Cell(rowIdx, colIdx).Range;
-                clearRange.SetRange(clearRange.Start, clearRange.End - 1);
-                clearRange.Text = "";
+                // 2. 清空单元格内容（同一个Range）
+                cellRange.Text = "";
 
-                // 4. 构建 SEQ 域参数
-                string fieldText;
-                if (isFirstSeqField && startNumber > 1)
-                {
-                    fieldText = $"PhotoNum \\r {startNumber}";
-                }
-                else
-                {
-                    fieldText = "PhotoNum";
-                }
+                // 3. 清空后Range失效，必须重新获取来插入域
+                cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                cellRange.SetRange(cellRange.Start, cellRange.Start);
 
-                // 5. 插入 SEQ 域（必须重新获取 Range）
-                Range insertRange = tbl.Cell(rowIdx, colIdx).Range;
-                insertRange.SetRange(insertRange.Start, insertRange.Start);
-                insertRange.Fields.Add(insertRange, WdFieldType.wdFieldSequence, fieldText, false);
+                string fieldText = (isFirstSeqField && startNumber > 1)
+                    ? $"PhotoNum \\r {startNumber}"
+                    : "PhotoNum";
+                cellRange.Fields.Add(cellRange, WdFieldType.wdFieldSequence, fieldText, false);
                 isFirstSeqField = false;
 
-                // 6. 在域后追加 "." 和文件名（必须重新获取 Range）
-                Range appendRange = tbl.Cell(rowIdx, colIdx).Range;
-                appendRange.SetRange(appendRange.End - 1, appendRange.End - 1);
+                // 4. 域插入后Range变化，重新获取来追加文本和设置格式
+                cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                cellRange.SetRange(cellRange.Start, cellRange.End - 1);
+
+                // 追加 ". " + 文件名
                 if (!string.IsNullOrEmpty(existingText))
                 {
+                    Range appendRange = tbl.Cell(rowIdx, colIdx).Range;
+                    appendRange.SetRange(appendRange.End - 1, appendRange.End - 1);
                     appendRange.Text = ". " + existingText;
                 }
                 else
                 {
+                    Range appendRange = tbl.Cell(rowIdx, colIdx).Range;
+                    appendRange.SetRange(appendRange.End - 1, appendRange.End - 1);
                     appendRange.Text = ".";
                 }
 
-                // 7. 设置格式（必须重新获取 Range）
-                Range formatRange = tbl.Cell(rowIdx, colIdx).Range;
-                formatRange.SetRange(formatRange.Start, formatRange.End - 1);
-                formatRange.ParagraphFormat.Alignment = alignment;
-                tbl.Cell(rowIdx, colIdx).VerticalAlignment = WdCellVerticalAlignment.wdCellAlignVerticalCenter;
+                // 5. 设置格式（复用上面的Range获取）
+                cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                cellRange.SetRange(cellRange.Start, cellRange.End - 1);
+                cellRange.ParagraphFormat.Alignment = alignment;
             }
             catch { }
         }

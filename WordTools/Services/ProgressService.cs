@@ -305,27 +305,34 @@ namespace WordTools.Services
             }
             finally
             {
-                // 先退出高性能模式，恢复屏幕更新
-                ExitHighPerformanceMode();
-
-                // 再添加编号（此时 ScreenUpdating=true，用户能看到进度）
+                // 先在高性能模式下完成编号（ScreenUpdating 仍为 false）
                 if (needAutoNumbering && startRow > 0 && tbl != null)
                 {
                     try
                     {
                         TableService.AddNumberingToDescriptionRows(tbl, _application.ActiveDocument,
-                            startRow, numberAlignment, needAutoNumbering);
+                            startRow, numberAlignment, needAutoNumbering, (msg) =>
+                            {
+                                // 临时恢复屏幕更新以显示状态栏进度
+                                try
+                                {
+                                    _application.ScreenUpdating = true;
+                                    _application.StatusBar = msg;
+                                    _application.ScreenUpdating = false;
+                                }
+                                catch { _application.StatusBar = msg; }
+                            });
                     }
-                    catch
-                    {
-                        // 忽略编号错误
-                    }
+                    catch { }
                 }
 
-                // 确保域代码不可见（显示域结果而非代码）
+                // 编号完成后再退出高性能模式（恢复 ScreenUpdating = true）
+                ExitHighPerformanceMode();
+
+                // 确保域代码不可见
                 try
                 {
-                    if (_application.ActiveDocument != null && _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
+                    if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
                     {
                         _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
                     }
@@ -417,27 +424,33 @@ namespace WordTools.Services
             }
             finally
             {
-                // 先退出高性能模式，恢复屏幕更新
-                ExitHighPerformanceMode();
-
-                // 再添加编号（此时 ScreenUpdating=true，用户能看到进度）
+                // 先在高性能模式下完成编号（ScreenUpdating 仍为 false）
                 if (needAutoNumbering && startRow > 0 && tbl != null)
                 {
                     try
                     {
                         TableService.AddNumberingToDescriptionRows(tbl, _application.ActiveDocument,
-                            startRow, numberAlignment, needAutoNumbering);
+                            startRow, numberAlignment, needAutoNumbering, (msg) =>
+                            {
+                                try
+                                {
+                                    _application.ScreenUpdating = true;
+                                    _application.StatusBar = msg;
+                                    _application.ScreenUpdating = false;
+                                }
+                                catch { _application.StatusBar = msg; }
+                            });
                     }
-                    catch
-                    {
-                        // 忽略编号错误
-                    }
+                    catch { }
                 }
 
-                // 确保域代码不可见（显示域结果而非代码）
+                // 编号完成后再退出高性能模式（恢复 ScreenUpdating = true）
+                ExitHighPerformanceMode();
+
+                // 确保域代码不可见
                 try
                 {
-                    if (_application.ActiveDocument != null && _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
+                    if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
                     {
                         _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
                     }
