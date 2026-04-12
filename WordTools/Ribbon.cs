@@ -153,9 +153,29 @@ namespace WordTools
                     return;
                 }
 
-                // 刷新表格编号
-                Services.TableService.RefreshTableNumbering(tbl, doc, 2);
+                // 刷新表格编号（带进度提示）
+                app.StatusBar = "正在刷新编号...";
+                System.Windows.Forms.Application.DoEvents();
 
+                Services.TableService.RefreshTableNumbering(tbl, doc, 2, (msg) =>
+                {
+                    try
+                    {
+                        app.StatusBar = msg;
+                        System.Windows.Forms.Application.DoEvents();
+                    }
+                    catch { }
+                });
+
+                // 确保域代码不可见
+                try
+                {
+                    if (doc.ActiveWindow.View.ShowFieldCodes)
+                        doc.ActiveWindow.View.ShowFieldCodes = false;
+                }
+                catch { }
+
+                app.StatusBar = "";
                 MessageBox.Show("表格编号已刷新完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Office.Interop.Word;
@@ -448,25 +449,237 @@ namespace WordTools.Services
         #region 自动编号
 
         /// <summary>
-        /// 刷新整个表格的编号（清除并重新添加）
+        /// 刷新表格编号（增量差异更新，只处理变化的行）
         /// </summary>
-        /// <param name="tbl">表格对象</param>
-        /// <param name="doc">文档对象</param>
-        /// <param name="alignment">对齐方式（1=居左, 2=居中, 3=居右）</param>
-        /// <param name="progressCallback">进度回调</param>
         public static void RefreshTableNumbering(Table tbl, Document doc, int alignment = 2, Action<string> progressCallback = null)
         {
             if (tbl == null || doc == null) return;
 
-            // 1. 清除编号（带进度）
-            progressCallback?.Invoke("正在清除编号...");
-            ClearTableNumbering(tbl, 1, progressCallback);
+            Application app = null;
+            bool wasScreenUpdating = true;
 
-            // 2. 添加编号（带进度）
-            progressCallback?.Invoke("正在添加编号...");
-            AddNumberingToDescriptionRows(tbl, doc, 1, alignment, true, progressCallback);
+            try
+            {
+                try
+                {
+                    app = tbl.Range.Application;
+                    wasScreenUpdating = app.ScreenUpdating;
+                    app.ScreenUpdating = false;
+                }
+                catch { }
 
-            progressCallback?.Invoke("编号刷新完成！");
+                // 对齐方式转换
+                WdParagraphAlignment wdAlignment;
+                switch (alignment)
+                {
+                    case 1: wdAlignment = WdParagraphAlignment.wdAlignParagraphLeft; break;
+                    case 3: wdAlignment = WdParagraphAlignment.wdAlignParagraphRight; break;
+                    default: wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter; break;
+                }
+
+                int colCount = tbl.Columns.Count;
+                int totalRows = tbl.Rows.Count;
+
+                // === Phase 1: 扫描所有行的图片状态 ===
+                DateTime startTime = DateTime.Now;
+                progressCallback?.Invoke("正在扫描表格...");
+                System.Windows.Forms.Application.DoEvents();
+
+                bool[] rowHasImages = new bool[totalRows + 1];
+                bool[] rowIsValid = new bool[totalRows + 1]; // Cells.Count >= colCount
+                int currentRowIdx = 0;
+                foreach (Row row in tbl.Rows)
+                {
+                    currentRowIdx++;
+                    try
+                    {
+                        if (currentRowIdx % 200 == 0)
+                        {
+                            if (progressCallback != null)
+                            {
+                                var elapsed = DateTime.Now - startTime;
+                                double remaining = currentRowIdx > 0 ? elapsed.TotalSeconds / currentRowIdx * (totalRows - currentRowIdx) : 0;
+                                progressCallback(string.Format("正在扫描表格... {0}/{1} - 已用:{2:F0}s 剩余:{3:F0}s",
+                                    currentRowIdx, totalRows, elapsed.TotalSeconds, remaining));
+                            }
+                            System.Windows.Forms.Application.DoEvents();
+                        }
+
+                        if (row.Cells.Count < colCount) continue;
+                        rowIsValid[currentRowIdx] = true;
+
+                        string rowText = row.Range.Text;
+                        if (rowText != null && rowText.IndexOf('\x01') >= 0)
+                            rowHasImages[currentRowIdx] = true;
+                    }
+                    catch { }
+                }
+
+                // === Phase 2: 收集现有 SEQ 域的行位置 ===
+                progressCallback?.Invoke(string.Format("正在分析编号状态... 已用:{0:F0}s", (DateTime.Now - startTime).TotalSeconds));
+                System.Windows.Forms.Application.DoEvents();
+
+                // key=行号, value=该行的 SEQ 域列表
+                var seqFieldsByRow = new Dictionary<int, List<Field>>();
+                int totalSeqFields = 0;
+                string lastSeqResultText = "";
+                try
+                {
+                    int fieldCount = 0;
+                    foreach (Field f in tbl.Range.Fields)
+                    {
+                        try
+                        {
+                            fieldCount++;
+                            if (fieldCount % 50 == 0)
+                            {
+                                progressCallback?.Invoke(string.Format("正在分析编号状态... 已处理{0}个域 已用:{1:F0}s",
+                                    fieldCount, (DateTime.Now - startTime).TotalSeconds));
+                                System.Windows.Forms.Application.DoEvents();
+                            }
+
+                            if (f.Type == WdFieldType.wdFieldSequence)
+                            {
+                                totalSeqFields++;
+                                try { lastSeqResultText = f.Result.Text; } catch { }
+                                int fRowIdx = f.Result.Cells[1].RowIndex;
+                                if (!seqFieldsByRow.ContainsKey(fRowIdx))
+                                    seqFieldsByRow[fRowIdx] = new List<Field>();
+                                seqFieldsByRow[fRowIdx].Add(f);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                // === Phase 3: 计算差异 ===
+                var rowsToAdd = new List<int>();    // 需要添加 SEQ 域的描述行
+                var rowsToRemove = new List<int>(); // 需要移除 SEQ 域的非描述行
+
+                for (int rowIdx = 1; rowIdx <= totalRows; rowIdx++)
+                {
+                    if (!rowIsValid[rowIdx]) continue;
+
+                    bool isDescRow = !rowHasImages[rowIdx] && rowIdx > 1 && rowHasImages[rowIdx - 1];
+                    bool hasSeq = seqFieldsByRow.ContainsKey(rowIdx);
+
+                    if (isDescRow && !hasSeq)
+                        rowsToAdd.Add(rowIdx);
+                    else if (!isDescRow && hasSeq)
+                        rowsToRemove.Add(rowIdx);
+                }
+
+                // === Phase 4: 移除不需要的 SEQ 域 ===
+                if (rowsToRemove.Count > 0)
+                {
+                    progressCallback?.Invoke(string.Format("正在移除 {0} 行多余编号... 已用:{1:F0}s", rowsToRemove.Count, (DateTime.Now - startTime).TotalSeconds));
+                    System.Windows.Forms.Application.DoEvents();
+
+                    // 收集要删除的域（从后往前删除避免索引偏移）
+                    var fieldsToDelete = new List<Field>();
+                    foreach (int rowIdx in rowsToRemove)
+                    {
+                        if (seqFieldsByRow.ContainsKey(rowIdx))
+                        {
+                            fieldsToDelete.AddRange(seqFieldsByRow[rowIdx]);
+                        }
+                    }
+
+                    // 删除 SEQ 域
+                    for (int i = fieldsToDelete.Count - 1; i >= 0; i--)
+                    {
+                        try { fieldsToDelete[i].Delete(); }
+                        catch { }
+                    }
+
+                    // 清理残留文本（域删除后可能留下 ". description" 或 "."）
+                    foreach (int rowIdx in rowsToRemove)
+                    {
+                        for (int colIdx = 1; colIdx <= colCount; colIdx++)
+                        {
+                            try
+                            {
+                                Range cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                                cellRange.SetRange(cellRange.Start, cellRange.End - 1);
+                                string cellText = CleanCellText(cellRange.Text);
+                                if (string.IsNullOrEmpty(cellText)) continue;
+
+                                // 移除域删除后的残留前缀（". "、"." 等）
+                                string cleaned = Regex.Replace(cellText, @"^[\.\s]+", "");
+                                if (cleaned != cellText)
+                                {
+                                    cellRange.Text = cleaned;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+
+                // === Phase 5: 为缺失的描述行添加 SEQ 域 ===
+                if (rowsToAdd.Count > 0)
+                {
+                    progressCallback?.Invoke(string.Format("正在为 {0} 行添加编号... 已用:{1:F0}s", rowsToAdd.Count, (DateTime.Now - startTime).TotalSeconds));
+                    System.Windows.Forms.Application.DoEvents();
+
+                    bool isFirstSeqField = (seqFieldsByRow.Count == 0 && rowsToRemove.Count == 0);
+                    // 对于刷新（startNumber=1），所有 SEQ 域都用 "PhotoNum"，不需要 \r 标记
+                    foreach (int rowIdx in rowsToAdd)
+                    {
+                        for (int col = 1; col <= colCount; col++)
+                        {
+                            try
+                            {
+                                InsertSeqField(tbl, rowIdx, col, wdAlignment, ref isFirstSeqField, 1);
+                            }
+                            catch { }
+                        }
+                    }
+                }
+
+                // === Phase 6: 智能更新域值 ===
+                // 判断是否需要 Fields.Update()：有增删变更 或 编号不连续（最后编号 != SEQ域总数）
+                bool needFieldsUpdate = rowsToAdd.Count > 0 || rowsToRemove.Count > 0;
+                if (!needFieldsUpdate && totalSeqFields > 0)
+                {
+                    int lastNum;
+                    if (int.TryParse(lastSeqResultText.Trim(), out lastNum))
+                    {
+                        needFieldsUpdate = (lastNum != totalSeqFields);
+                    }
+                    else
+                    {
+                        needFieldsUpdate = true; // 无法解析，保险起见更新
+                    }
+                }
+
+                if (needFieldsUpdate)
+                {
+                    progressCallback?.Invoke(string.Format("正在更新域... 已用:{0:F0}s", (DateTime.Now - startTime).TotalSeconds));
+                    System.Windows.Forms.Application.DoEvents();
+
+                    try
+                    {
+                        tbl.Range.Fields.Update();
+                    }
+                    catch { }
+
+                    progressCallback?.Invoke(string.Format("编号刷新完成！(添加 {0} 行, 移除 {1} 行, 耗时 {2:F1}s)", rowsToAdd.Count, rowsToRemove.Count, (DateTime.Now - startTime).TotalSeconds));
+                }
+                else
+                {
+                    progressCallback?.Invoke(string.Format("编号已是最新，无需更新 (耗时 {0:F1}s)", (DateTime.Now - startTime).TotalSeconds));
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (app != null) app.ScreenUpdating = wasScreenUpdating;
+                }
+                catch { }
+            }
         }
 
         /// <summary>
