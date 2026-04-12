@@ -252,31 +252,59 @@ namespace WordTools.Services
         /// </summary>
         /// <param name="tbl">表格对象</param>
         /// <param name="rowCount">要添加的行数</param>
-        /// <param name="app">Word应用程序对象（用于更新状态栏）</param>
+        /// <param name="app">Word应用程序对象（用于更新状态栏和Selection）</param>
         public static void BatchAddRows(Table tbl, int rowCount, Application app = null)
         {
             if (tbl == null || rowCount <= 0) return;
 
+            // 如果app为null，回退到逐行添加
+            if (app == null)
+            {
+                try
+                {
+                    for (int i = 1; i <= rowCount; i++)
+                    {
+                        tbl.Rows.Add();
+                    }
+                }
+                catch
+                {
+                    // 忽略错误
+                }
+                return;
+            }
+
             try
             {
-                const int BATCH_SIZE = 100;
-                int batchCount = 0;
+                const int BATCH_SIZE = 200; // 每批插入200行
+                int remaining = rowCount;
+                int added = 0;
 
-                for (int i = 1; i <= rowCount; i++)
+                while (remaining > 0)
                 {
-                    tbl.Rows.Add();
-                    batchCount++;
+                    int batch = System.Math.Min(remaining, BATCH_SIZE);
 
-                    // 每100行更新一次状态栏
-                    if (batchCount >= BATCH_SIZE)
+                    try
                     {
-                        if (app != null)
-                        {
-                            app.StatusBar = string.Format("正在准备表格... {0}/{1}", i, rowCount);
-                        }
-                        System.Windows.Forms.Application.DoEvents();
-                        batchCount = 0;
+                        // 选中表格最后一行，使用 InsertRowsBelow 批量插入
+                        tbl.Rows[tbl.Rows.Count].Select();
+                        app.Selection.InsertRowsBelow(batch);
                     }
+                    catch
+                    {
+                        // 如果批量插入失败，回退到逐行添加
+                        for (int i = 0; i < batch; i++)
+                        {
+                            try { tbl.Rows.Add(); } catch { break; }
+                        }
+                    }
+
+                    added += batch;
+                    remaining -= batch;
+
+                    // 更新进度
+                    app.StatusBar = string.Format("正在准备表格... {0}/{1}", added, rowCount);
+                    System.Windows.Forms.Application.DoEvents();
                 }
             }
             catch

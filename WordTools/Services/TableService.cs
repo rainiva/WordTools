@@ -712,17 +712,12 @@ namespace WordTools.Services
                         // 跳过合并行
                         if (tbl.Rows[rowIdx].Cells.Count < colCount) continue;
 
-                        for (int c = 1; c <= colCount; c++)
+                        // 用行级 Range.Text 检查内联图片标记字符（\x01），比 InlineShapes.Count 快得多
+                        // Word 中每个内联图片在 Range.Text 中表示为 \x01 字符
+                        string rowText = tbl.Rows[rowIdx].Range.Text;
+                        if (rowText != null && rowText.IndexOf('\x01') >= 0)
                         {
-                            try
-                            {
-                                if (tbl.Cell(rowIdx, c).Range.InlineShapes.Count > 0)
-                                {
-                                    rowHasImages[rowIdx] = true;
-                                    break; // 找到一个有图片的列就够了
-                                }
-                            }
-                            catch { }
+                            rowHasImages[rowIdx] = true;
                         }
                     }
                     catch { }
@@ -800,7 +795,7 @@ namespace WordTools.Services
         /// <summary>
         /// 计算下一个 SEQ 编号起始值
         /// </summary>
-        private static int CalculateNextSequenceNumber(Table tbl, int startRow)
+        public static int CalculateNextSequenceNumber(Table tbl, int startRow)
         {
             int maxNumber = 0;
             int tableColCount = tbl.Columns.Count;
@@ -886,7 +881,7 @@ namespace WordTools.Services
         /// <summary>
         /// 在指定单元格插入 SEQ 域
         /// </summary>
-        private static void InsertSeqField(Table tbl, int rowIdx, int colIdx,
+        public static void InsertSeqField(Table tbl, int rowIdx, int colIdx,
             WdParagraphAlignment alignment, ref bool isFirstSeqField, int startNumber)
         {
             try
