@@ -691,12 +691,8 @@ namespace WordTools.Services
                 int colCount = tbl.Columns.Count;
                 int totalRows = tbl.Rows.Count;
 
-                // === 计算进度里程碑 ===
+                // === 计算需要处理的总行数 ===
                 int totalToProcess = totalRows - startRow + 1;
-                int milestone25 = startRow + totalToProcess / 4;
-                int milestone50 = startRow + totalToProcess / 2;
-                int milestone75 = startRow + totalToProcess * 3 / 4;
-                bool reported25 = false, reported50 = false, reported75 = false;
 
                 // === 第一遍：预扫描所有行的图片状态 ===
                 bool[] rowHasImages = new bool[totalRows + 1]; // 索引0不用
@@ -707,6 +703,12 @@ namespace WordTools.Services
                 {
                     try
                     {
+                        // 定期让出UI线程，防止Word无响应
+                        if ((rowIdx - scanStart) % 100 == 0 && rowIdx > scanStart)
+                        {
+                            System.Windows.Forms.Application.DoEvents();
+                        }
+
                         // 跳过合并行
                         if (tbl.Rows[rowIdx].Cells.Count < colCount) continue;
 
@@ -731,6 +733,17 @@ namespace WordTools.Services
                 {
                     try
                     {
+                        // 定期让出UI线程并更新进度
+                        if ((rowIdx - startRow) % 50 == 0 && rowIdx > startRow)
+                        {
+                            if (progressCallback != null && totalToProcess > 0)
+                            {
+                                int percent = (rowIdx - startRow) * 100 / totalToProcess;
+                                progressCallback($"正在编号... {percent}%");
+                            }
+                            System.Windows.Forms.Application.DoEvents();
+                        }
+
                         // 跳过合并行
                         if (tbl.Rows[rowIdx].Cells.Count < colCount) continue;
 
@@ -750,26 +763,6 @@ namespace WordTools.Services
                                 catch { }
                             }
                         }
-
-                        // 里程碑进度回调
-                        if (progressCallback != null)
-                        {
-                            if (!reported25 && rowIdx >= milestone25)
-                            {
-                                progressCallback("正在编号... 25%");
-                                reported25 = true;
-                            }
-                            else if (!reported50 && rowIdx >= milestone50)
-                            {
-                                progressCallback("正在编号... 50%");
-                                reported50 = true;
-                            }
-                            else if (!reported75 && rowIdx >= milestone75)
-                            {
-                                progressCallback("正在编号... 75%");
-                                reported75 = true;
-                            }
-                        }
                     }
                     catch { }
                 }
@@ -777,6 +770,9 @@ namespace WordTools.Services
                 // 更新域：增量模式只更新 startRow 之后的范围
                 try
                 {
+                    progressCallback?.Invoke("正在更新域...");
+                    System.Windows.Forms.Application.DoEvents();
+
                     if (startRow > 1)
                     {
                         // 增量模式：缩小更新范围，只更新 startRow 之后的域
@@ -895,8 +891,11 @@ namespace WordTools.Services
         {
             try
             {
-                // 1. 获取Range，读取现有文本
-                Range cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                // 缓存 Cell 对象，避免重复的 tbl.Cell() 查找
+                Cell cell = tbl.Cell(rowIdx, colIdx);
+
+                // 1. 读取现有文本
+                Range cellRange = cell.Range;
                 cellRange.SetRange(cellRange.Start, cellRange.End - 1);
                 string existingText = CleanCellText(cellRange.Text);
 
@@ -906,11 +905,11 @@ namespace WordTools.Services
                     existingText = Regex.Replace(existingText, @"^\d+[.)]+\s*", "");
                 }
 
-                // 2. 清空单元格内容（同一个Range）
+                // 2. 清空单元格内容
                 cellRange.Text = "";
 
-                // 3. 清空后Range失效，必须重新获取来插入域
-                cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                // 3. 插入 SEQ 域（清空后 Range 失效，从 cell 重新获取）
+                cellRange = cell.Range;
                 cellRange.SetRange(cellRange.Start, cellRange.Start);
 
                 string fieldText = (isFirstSeqField && startNumber > 1)
@@ -919,26 +918,22 @@ namespace WordTools.Services
                 cellRange.Fields.Add(cellRange, WdFieldType.wdFieldSequence, fieldText, false);
                 isFirstSeqField = false;
 
-                // 4. 域插入后Range变化，重新获取来追加文本和设置格式
-                cellRange = tbl.Cell(rowIdx, colIdx).Range;
-                cellRange.SetRange(cellRange.Start, cellRange.End - 1);
+                // 4. 追加 ". " + 文件名 并设置格式（域插入后从 cell 重新获取）
+                cellRange = cell.Range;
+                int appendPos = cellRange.End - 1;
+                cellRange.SetRange(appendPos, appendPos);
 
-                // 追加 ". " + 文件名
                 if (!string.IsNullOrEmpty(existingText))
                 {
-                    Range appendRange = tbl.Cell(rowIdx, colIdx).Range;
-                    appendRange.SetRange(appendRange.End - 1, appendRange.End - 1);
-                    appendRange.Text = ". " + existingText;
+                    cellRange.Text = ". " + existingText;
                 }
                 else
                 {
-                    Range appendRange = tbl.Cell(rowIdx, colIdx).Range;
-                    appendRange.SetRange(appendRange.End - 1, appendRange.End - 1);
-                    appendRange.Text = ".";
+                    cellRange.Text = ".";
                 }
 
-                // 5. 设置格式（复用上面的Range获取）
-                cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                // 5. 设置对齐格式
+                cellRange = cell.Range;
                 cellRange.SetRange(cellRange.Start, cellRange.End - 1);
                 cellRange.ParagraphFormat.Alignment = alignment;
             }

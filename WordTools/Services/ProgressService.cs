@@ -305,31 +305,44 @@ namespace WordTools.Services
             }
             finally
             {
-                // 先在高性能模式下完成编号（ScreenUpdating 仍为 false）
+                // 1. 先退出高性能模式，让用户立即看到已插入的图片
+                ExitHighPerformanceMode();
+
+                // 2. 编号：重新关闭 ScreenUpdating 加速 COM 操作（5-10倍性能提升）
                 if (needAutoNumbering && startRow > 0 && tbl != null)
                 {
                     try
                     {
+                        _application.StatusBar = "正在编号，请稍候...";
+                        System.Windows.Forms.Application.DoEvents();
+
+                        // 关闭屏幕更新加速编号
+                        _application.ScreenUpdating = false;
+
                         TableService.AddNumberingToDescriptionRows(tbl, _application.ActiveDocument,
                             startRow, numberAlignment, needAutoNumbering, (msg) =>
                             {
-                                // 临时恢复屏幕更新以显示状态栏进度
                                 try
                                 {
+                                    // 临时恢复屏幕更新以显示进度
                                     _application.ScreenUpdating = true;
                                     _application.StatusBar = msg;
+                                    System.Windows.Forms.Application.DoEvents();
                                     _application.ScreenUpdating = false;
                                 }
-                                catch { _application.StatusBar = msg; }
+                                catch { }
                             });
+
+                        // 编号完成，恢复屏幕更新
+                        _application.ScreenUpdating = true;
                     }
-                    catch { }
+                    catch
+                    {
+                        try { _application.ScreenUpdating = true; } catch { }
+                    }
                 }
 
-                // 编号完成后再退出高性能模式（恢复 ScreenUpdating = true）
-                ExitHighPerformanceMode();
-
-                // 确保域代码不可见
+                // 3. 确保域代码不可见（保持原有逻辑不变）
                 try
                 {
                     if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
@@ -424,30 +437,44 @@ namespace WordTools.Services
             }
             finally
             {
-                // 先在高性能模式下完成编号（ScreenUpdating 仍为 false）
+                // 1. 先退出高性能模式，让用户立即看到已插入的图片
+                ExitHighPerformanceMode();
+
+                // 2. 编号：重新关闭 ScreenUpdating 加速 COM 操作（5-10倍性能提升）
                 if (needAutoNumbering && startRow > 0 && tbl != null)
                 {
                     try
                     {
+                        _application.StatusBar = "正在编号，请稍候...";
+                        System.Windows.Forms.Application.DoEvents();
+
+                        // 关闭屏幕更新加速编号
+                        _application.ScreenUpdating = false;
+
                         TableService.AddNumberingToDescriptionRows(tbl, _application.ActiveDocument,
                             startRow, numberAlignment, needAutoNumbering, (msg) =>
                             {
                                 try
                                 {
+                                    // 临时恢复屏幕更新以显示进度
                                     _application.ScreenUpdating = true;
                                     _application.StatusBar = msg;
+                                    System.Windows.Forms.Application.DoEvents();
                                     _application.ScreenUpdating = false;
                                 }
-                                catch { _application.StatusBar = msg; }
+                                catch { }
                             });
+
+                        // 编号完成，恢复屏幕更新
+                        _application.ScreenUpdating = true;
                     }
-                    catch { }
+                    catch
+                    {
+                        try { _application.ScreenUpdating = true; } catch { }
+                    }
                 }
 
-                // 编号完成后再退出高性能模式（恢复 ScreenUpdating = true）
-                ExitHighPerformanceMode();
-
-                // 确保域代码不可见
+                // 3. 确保域代码不可见（保持原有逻辑不变）
                 try
                 {
                     if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
