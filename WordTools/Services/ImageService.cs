@@ -127,8 +127,9 @@ namespace WordTools.Services
 
                 return p;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"InsertImageToCell error: {ex.Message}");
                 return null;
             }
         }
@@ -161,10 +162,18 @@ namespace WordTools.Services
                 // msoTrue = -1
                 ((dynamic)p).LockAspectRatio = -1;
 
-                // 快速调整：只检查宽度限制
+                // 快速调整：检查宽度限制
                 if (p.Width > cellWidth)
                 {
                     p.Width = cellWidth;
+                }
+
+                // 检查高度限制：如果按宽度缩放后高度仍超出可用高度，则按高度再次缩放
+                float cellHeight = targetCell.Height - 6;
+                if (cellHeight > 10 && p.Height > cellHeight)
+                {
+                    // 按高度缩放会保持宽高比，因为 LockAspectRatio = -1 (msoTrue)
+                    p.Height = cellHeight;
                 }
 
                 // 最小高度限制

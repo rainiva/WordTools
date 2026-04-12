@@ -187,6 +187,62 @@ namespace WordTools.Services
             return count;
         }
 
+        /// <summary>
+        /// 一次遍历获取图片文件列表和总数（避免重复扫描目录）
+        /// </summary>
+        public static ImageFileCollection GetImageFiles(string folderPath, bool includeRootImages, bool includeSubFolderImages)
+        {
+            var result = new ImageFileCollection();
+
+            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
+            {
+                return result;
+            }
+
+            if (includeRootImages)
+            {
+                var rootFiles = GetRootImageFiles(folderPath);
+                if (rootFiles != null && rootFiles.Length > 0)
+                {
+                    result.RootFiles = rootFiles;
+                    result.TotalCount += rootFiles.Length;
+                }
+            }
+
+            if (includeSubFolderImages)
+            {
+                var subfolders = GetSubfolders(folderPath);
+                if (subfolders != null)
+                {
+                    foreach (var subfolder in subfolders)
+                    {
+                        var files = GetRootImageFiles(subfolder);
+                        if (files != null && files.Length > 0)
+                        {
+                            result.SubfolderFiles[subfolder] = files;
+                            result.TotalCount += files.Length;
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        #region 图片文件集合
+
+        /// <summary>
+        /// 图片文件集合（缓存遍历结果）
+        /// </summary>
+        public class ImageFileCollection
+        {
+            public string[] RootFiles { get; set; }
+            public Dictionary<string, string[]> SubfolderFiles { get; set; } = new Dictionary<string, string[]>();
+            public int TotalCount { get; set; }
+        }
+
         #endregion
 
         #region 自然排序
@@ -215,12 +271,22 @@ namespace WordTools.Services
                     string num1 = ExtractNumber(str1, ref i1);
                     string num2 = ExtractNumber(str2, ref i2);
 
-                    // 比较数字（忽略前导零）
-                    double val1 = double.Parse(num1);
-                    double val2 = double.Parse(num2);
+                    // 比较数字（使用 TryParse 避免溢出风险）
+                    double val1, val2;
+                    bool parsed1 = double.TryParse(num1, out val1);
+                    bool parsed2 = double.TryParse(num2, out val2);
 
-                    if (val1 < val2) return -1;
-                    if (val1 > val2) return 1;
+                    if (parsed1 && parsed2)
+                    {
+                        if (val1 < val2) return -1;
+                        if (val1 > val2) return 1;
+                    }
+                    else
+                    {
+                        // 解析失败时回退到字符串比较
+                        int cmp = string.Compare(num1, num2, StringComparison.Ordinal);
+                        if (cmp != 0) return cmp;
+                    }
                 }
                 else
                 {

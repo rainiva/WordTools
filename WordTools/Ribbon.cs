@@ -124,6 +124,46 @@ namespace WordTools
             }
         }
 
+        public void OnRefreshNumberingClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                if (Globals.ThisAddIn == null || Globals.ThisAddIn.Application == null || Globals.ThisAddIn.Application.ActiveDocument == null)
+                {
+                    MessageBox.Show("请先打开一个 Word 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var app = Globals.ThisAddIn.Application;
+                var doc = app.ActiveDocument;
+                var selection = app.Selection;
+
+                // 检查是否在表格中
+                if (!Services.TableService.IsSelectionInTable(selection))
+                {
+                    MessageBox.Show("请先将光标放在需要刷新编号的表格中", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // 获取当前表格
+                var tbl = Services.TableService.GetCurrentTable(selection);
+                if (tbl == null)
+                {
+                    MessageBox.Show("无法获取当前表格", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // 刷新表格编号
+                Services.TableService.RefreshTableNumbering(tbl, doc, 2);
+
+                MessageBox.Show("表格编号已刷新完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("刷新编号失败: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         public string GetLabel(Office.IRibbonControl control)
         {
             switch (control.Id)
@@ -172,7 +212,8 @@ namespace WordTools
             {
                 if (string.Compare(resourceName, resourceNames[i], StringComparison.OrdinalIgnoreCase) == 0)
                 {
-                    using (StreamReader resourceReader = new StreamReader(asm.GetManifestResourceStream(resourceNames[i])))
+                    using (var stream = asm.GetManifestResourceStream(resourceNames[i]))
+                    using (var resourceReader = new StreamReader(stream))
                     {
                         if (resourceReader != null)
                         {

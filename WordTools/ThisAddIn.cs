@@ -71,7 +71,8 @@ namespace WordTools
             {
                 if (string.Compare("WordTools.Ribbon.xml", resourceNames[i], StringComparison.OrdinalIgnoreCase) == 0)
                 {
-                    using (StreamReader reader = new StreamReader(asm.GetManifestResourceStream(resourceNames[i])))
+                    using (var stream = asm.GetManifestResourceStream(resourceNames[i]))
+                    using (var reader = new StreamReader(stream))
                     {
                         return reader.ReadToEnd();
                     }
@@ -122,6 +123,59 @@ namespace WordTools
                 "关于",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+
+        /// <summary>
+        /// 刷新编号按钮点击
+        /// </summary>
+        public void OnRefreshNumberingClick(Office.IRibbonControl control)
+        {
+            try
+            {
+                if (Application == null || Application.ActiveDocument == null)
+                {
+                    MessageBox.Show("请先打开一个 Word 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var doc = Application.ActiveDocument;
+                var selection = Application.Selection;
+
+                if (!Services.TableService.IsSelectionInTable(selection))
+                {
+                    MessageBox.Show("请先将光标放在需要刷新编号的表格中", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var tbl = Services.TableService.GetCurrentTable(selection);
+                if (tbl == null)
+                {
+                    MessageBox.Show("无法获取当前表格", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // 使用状态栏显示进度
+                Application.ScreenUpdating = false;
+                try
+                {
+                    Services.TableService.RefreshTableNumbering(tbl, doc, 2, (status) =>
+                    {
+                        Application.StatusBar = status;
+                        System.Windows.Forms.Application.DoEvents();
+                    });
+                }
+                finally
+                {
+                    Application.ScreenUpdating = true;
+                    Application.StatusBar = "";
+                }
+
+                MessageBox.Show("表格编号已刷新完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("刷新编号失败: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         /// <summary>

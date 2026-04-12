@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.OleDb;
+using System.Diagnostics;
 using System.Windows.Forms;
 using Word = Microsoft.Office.Interop.Word;
 
@@ -75,6 +76,12 @@ namespace WordTools.Services
             catch (Exception ex)
             {
                 MessageBox.Show($"执行填充时出错: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // 确保 DataTable 资源被释放
+                excelData?.Dispose();
+                excelData = null;
             }
         }
 
@@ -188,6 +195,13 @@ namespace WordTools.Services
 
                 foreach (Word.Table tbl in doc.Tables)
                 {
+                    // 空引用检查
+                    if (tbl == null)
+                    {
+                        Debug.WriteLine("[EDF_DataFillerService] Warning: 遇到 null 表格对象，跳过");
+                        continue;
+                    }
+
                     for (int wordRow = 1; wordRow <= tbl.Rows.Count; wordRow++)
                     {
                         // 获取锚定单元格的值
@@ -258,20 +272,18 @@ namespace WordTools.Services
                     diagInfo += $"当前锚定字段设置: {anchorField}\n";
                     diagInfo += $"Excel数据行数: {excelData.Rows.Count}\n\n";
 
-                    // 显示Word表格前5行的前两列
+                    // 显示Word表格前5行的前两列（只显示第一个表格）
                     diagInfo += "Word表格内容（前5行）:\n";
-                    int tblIdx = 0;
-                    foreach (Word.Table tbl in doc.Tables)
+                    if (doc.Tables.Count > 0)
                     {
-                        tblIdx++;
-                        diagInfo += $"【表格{tblIdx}】\n";
+                        Word.Table tbl = doc.Tables[1];
+                        diagInfo += "【表格1】\n";
                         for (int wordRow = 1; wordRow <= Math.Min(tbl.Rows.Count, 5); wordRow++)
                         {
                             string col1 = GetCellText(tbl.Cell(wordRow, 1));
                             string col2 = tbl.Rows[wordRow].Cells.Count >= 2 ? GetCellText(tbl.Cell(wordRow, 2)) : "(无第二列)";
                             diagInfo += $"  行{wordRow} 列1: {col1.Substring(0, Math.Min(30, col1.Length))} | 列2: {col2.Substring(0, Math.Min(30, col2.Length))}\n";
                         }
-                        if (tblIdx >= 1) break;
                     }
 
                     // 显示Excel前5行数据
@@ -310,8 +322,9 @@ namespace WordTools.Services
                 text = text.Replace("\r\a", "");
                 return text;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in GetCellText: {ex.Message}");
                 return "";
             }
         }
@@ -323,10 +336,18 @@ namespace WordTools.Services
         {
             try
             {
-                // 确保Word表格有足够的列
-                while (tbl.Rows[wordRow].Cells.Count < targetColumn)
+                // 确保Word表格有足够的列（添加最大列数限制防止无限循环）
+                const int MAX_COLUMNS = 50;
+                int addedColumns = 0;
+                while (tbl.Rows[wordRow].Cells.Count < targetColumn && addedColumns < MAX_COLUMNS)
                 {
                     tbl.Rows[wordRow].Cells.Add();
+                    addedColumns++;
+                }
+
+                if (addedColumns >= MAX_COLUMNS)
+                {
+                    Debug.WriteLine($"[EDF_DataFillerService] Warning: 添加列数超过最大限制 {MAX_COLUMNS}，停止添加");
                 }
 
                 // 获取Excel第一列数据并填充到Word指定列
@@ -336,7 +357,10 @@ namespace WordTools.Services
                     tbl.Cell(wordRow, targetColumn).Range.Text = dataValue;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in FillRowData: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -426,7 +450,10 @@ namespace WordTools.Services
                 // 更新单元格内容
                 tbl.Cell(wordRow, 1).Range.Text = newText;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in FillStructureB: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -447,7 +474,10 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in FillStructureC: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -466,7 +496,10 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in FillStructureD: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -532,7 +565,10 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in SaveConfig: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -555,7 +591,10 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDF_DataFillerService] Error in LoadConfig: {ex.Message}");
+            }
 
             return defaultValue;
         }

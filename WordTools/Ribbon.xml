@@ -17,6 +17,15 @@
                   imageMso="PictureInsertFromFile"
                   onAction="OnInsertPhotosClick"/>
           
+          <!-- 刷新编号按钮 -->
+          <button id="btnRefreshNumbering"
+                  label="刷新编号"
+                  screentip="刷新表格编号"
+                  supertip="扫描当前光标所在的表格，为所有描述行重新添加编号。适用于手动增删图片后修复编号。"
+                  size="large"
+                  imageMso="NumberInsert"
+                  onAction="OnRefreshNumberingClick"/>
+          
         </group>
         
         <!-- 工具组 -->

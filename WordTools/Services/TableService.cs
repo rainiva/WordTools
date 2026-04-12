@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Office.Interop.Word;
 
@@ -54,29 +55,44 @@ namespace WordTools.Services
                     return false;
                 }
 
-                // 检查是否使用了自动编号，如果是则清除编号使其可复用
-                if (targetCell.Range.Paragraphs.Count > 0)
+                // 检查单元格是否包含 SEQ 域（编号域）
+                bool hasSeqField = false;
+                foreach (Field field in targetCell.Range.Fields)
                 {
-                    var para = targetCell.Range.Paragraphs[1];
-                    if (para.Range.ListFormat.ListType != WdListType.wdListNoNumbering)
+                    if (field.Type == WdFieldType.wdFieldSequence)
                     {
-                        try
-                        {
-                            targetCell.Range.ListFormat.RemoveNumbers();
-                            targetCell.Range.Text = "";
-                            return true;
-                        }
-                        catch
-                        {
-                            return false;
-                        }
+                        hasSeqField = true;
+                        break;
                     }
                 }
 
+                // 如果包含 SEQ 域，清除域使其可复用
+                if (hasSeqField)
+                {
+                    try
+                    {
+                        // 删除所有 SEQ 域
+                        int fieldCount = targetCell.Range.Fields.Count;
+                        for (int i = fieldCount; i >= 1; i--)
+                        {
+                            if (targetCell.Range.Fields[i].Type == WdFieldType.wdFieldSequence)
+                            {
+                                targetCell.Range.Fields[i].Delete();
+                            }
+                        }
+                        // 清除剩余文本
+                        targetCell.Range.Text = "";
+                    }
+                    catch
+                    {
+                        // 清除失败则不适合插入
+                        return false;
+                    }
+                    return true;
+                }
+
                 // 获取单元格文本并清理
-                string cellText = targetCell.Range.Text ?? "";
-                cellText = cellText.Replace("\r", "").Replace("\n", "")
-                    .Replace("\t", "").Replace("\a", "").Replace("\u00A0", "").Trim();
+                string cellText = CleanCellText(targetCell.Range.Text);
 
                 // 空单元格适合插入
                 if (string.IsNullOrEmpty(cellText))
@@ -84,34 +100,21 @@ namespace WordTools.Services
                     return true;
                 }
 
-                // 检查是否为序号格式（纯数字或数字+标点）
-                // 如果是序号，清除文本使其可复用
-                if (char.IsDigit(cellText[0]))
+                // 检查是否为文本编号格式（如 "1.", "2." 等）
+                // 如果是编号，清除文本使其可复用
+                if (ExtractNumberFromCellText(cellText).HasValue)
                 {
-                    // 检查是否只包含数字和常见序号标点
-                    bool isValidNumber = true;
-                    foreach (char c in cellText)
+                    // 清除序号文本，使单元格可以被复用插入图片
+                    try
                     {
-                        if (!char.IsDigit(c) && c != '.' && c != ')' && c != '(' && c != '-' && c != ' ')
-                        {
-                            isValidNumber = false;
-                            break;
-                        }
+                        targetCell.Range.Text = "";
                     }
-                    if (isValidNumber)
+                    catch
                     {
-                        // 清除序号文本，使单元格可以被复用插入图片
-                        try
-                        {
-                            targetCell.Range.Text = "";
-                        }
-                        catch
-                        {
-                            // 清除失败则不适合插入
-                            return false;
-                        }
-                        return true;
+                        // 清除失败则不适合插入
+                        return false;
                     }
+                    return true;
                 }
 
                 return true;
@@ -161,29 +164,37 @@ namespace WordTools.Services
                     }
 
                     // 根据优先列返回结果
-                    if (preferredCol == 2 && col2Suitable)
+                    if (preferredCol == 2)
                     {
-                        foundRow = row;
-                        foundCol = 2;
-                        return true;
+                        // 优先第2列：先检查第2列，再检查第1列
+                        if (col2Suitable)
+                        {
+                            foundRow = row;
+                            foundCol = 2;
+                            return true;
+                        }
+                        if (col1Suitable)
+                        {
+                            foundRow = row;
+                            foundCol = 1;
+                            return true;
+                        }
                     }
-                    else if (preferredCol == 2 && col1Suitable)
+                    else
                     {
-                        foundRow = row;
-                        foundCol = 1;
-                        return true;
-                    }
-                    else if (preferredCol == 1 && col1Suitable)
-                    {
-                        foundRow = row;
-                        foundCol = 1;
-                        return true;
-                    }
-                    else if (preferredCol == 1 && col2Suitable)
-                    {
-                        foundRow = row;
-                        foundCol = 2;
-                        return true;
+                        // 优先第1列：先检查第1列，再检查第2列
+                        if (col1Suitable)
+                        {
+                            foundRow = row;
+                            foundCol = 1;
+                            return true;
+                        }
+                        if (col2Suitable)
+                        {
+                            foundRow = row;
+                            foundCol = 2;
+                            return true;
+                        }
                     }
                 }
             }
@@ -424,7 +435,6 @@ namespace WordTools.Services
                     cell.Range.Text = "N/A";
                     cell.Range.ParagraphFormat.Alignment = WdParagraphAlignment.wdAlignParagraphCenter;
                     cell.VerticalAlignment = WdCellVerticalAlignment.wdCellAlignVerticalCenter;
-                    cell.Range.ListFormat.RemoveNumbers();
                 }
             }
             catch
@@ -438,302 +448,515 @@ namespace WordTools.Services
         #region 自动编号
 
         /// <summary>
-        /// 清除表格自动编号
+        /// 刷新整个表格的编号（清除并重新添加）
         /// </summary>
         /// <param name="tbl">表格对象</param>
-        /// <param name="startRow">开始行</param>
-        /// <returns>原来的编号对齐方式（1=居左, 2=居中, 3=居右）</returns>
-        public static int ClearTableNumbering(Table tbl, int startRow = 1)
+        /// <param name="doc">文档对象</param>
+        /// <param name="alignment">对齐方式（1=居左, 2=居中, 3=居右）</param>
+        /// <param name="progressCallback">进度回调</param>
+        public static void RefreshTableNumbering(Table tbl, Document doc, int alignment = 2, Action<string> progressCallback = null)
+        {
+            if (tbl == null || doc == null) return;
+
+            // 1. 清除编号（带进度）
+            progressCallback?.Invoke("正在清除编号...");
+            ClearTableNumbering(tbl, 1, progressCallback);
+
+            // 2. 添加编号（带进度）
+            progressCallback?.Invoke("正在添加编号...");
+            AddNumberingToDescriptionRows(tbl, doc, 1, alignment, true, progressCallback);
+
+            progressCallback?.Invoke("编号刷新完成！");
+        }
+
+        /// <summary>
+        /// 清除表格自动编号（支持 Word 原生列表编号、SEQ 域和文本编号方式）
+        /// </summary>
+        public static int ClearTableNumbering(Table tbl, int startRow = 1, Action<string> progressCallback = null)
         {
             if (tbl == null) return 0;
 
             int originalAlignment = 0;
+            Application app = null;
+            bool wasScreenUpdating = true;
 
             try
             {
-                int clearStartRow = startRow == 1 ? 1 : startRow;
-
-                // 检测原来的编号对齐方式
-                if (tbl.Rows.Count > 0)
+                try
                 {
-                    int checkRow = clearStartRow > 1 && clearStartRow <= tbl.Rows.Count 
-                        ? clearStartRow - 1 : 1;
+                    app = tbl.Range.Application;
+                    wasScreenUpdating = app.ScreenUpdating;
+                    app.ScreenUpdating = false;
+                }
+                catch { }
 
+                // 计算清除范围的起始位置
+                int clearStartRow = Math.Max(1, startRow);
+                int totalRows = tbl.Rows.Count;
+                clearStartRow = Math.Min(clearStartRow, totalRows);
+
+                // 获取 startRow 对应的文档位置，用于判断域是否在清除范围内
+                int rangeStartPos = 0;
+                try
+                {
+                    rangeStartPos = tbl.Cell(clearStartRow, 1).Range.Start;
+                }
+                catch { rangeStartPos = 0; }
+
+                // === 第0步：清除 Word 原生自动编号格式（ListFormat） ===
+                // 仅在全表清除时执行（startRow=1），增量模式跳过
+                if (clearStartRow <= 1)
+                {
+                    progressCallback?.Invoke("正在清除列表编号格式...");
                     try
                     {
-                        if (tbl.Cell(checkRow, 1).Range.ListFormat.ListType != WdListType.wdListNoNumbering)
-                        {
-                            var alignment = tbl.Cell(checkRow, 1).Range.ParagraphFormat.Alignment;
-                            switch (alignment)
-                            {
-                                case WdParagraphAlignment.wdAlignParagraphLeft:
-                                    originalAlignment = 1;
-                                    break;
-                                case WdParagraphAlignment.wdAlignParagraphCenter:
-                                    originalAlignment = 2;
-                                    break;
-                                case WdParagraphAlignment.wdAlignParagraphRight:
-                                    originalAlignment = 3;
-                                    break;
-                                default:
-                                    originalAlignment = 1;
-                                    break;
-                            }
-                        }
+                        tbl.Range.ListFormat.RemoveNumbers();
                     }
-                    catch
-                    {
-                        // 忽略错误
-                    }
+                    catch { }
                 }
 
-                // 清除编号
-                for (int rowIdx = clearStartRow; rowIdx <= tbl.Rows.Count; rowIdx++)
+                // === 第1步：删除 startRow 之后的 SEQ 域 ===
+                progressCallback?.Invoke("正在清除 SEQ 域...");
+                try
                 {
-                    try
+                    Fields allFields = tbl.Range.Fields;
+                    for (int i = allFields.Count; i >= 1; i--)
                     {
-                        var row = tbl.Rows[rowIdx];
-                        bool hadNumbering = row.Range.ListFormat.ListType != WdListType.wdListNoNumbering;
-                        row.Range.ListFormat.RemoveNumbers();
-                        
-                        // 清除编号行的单元格内容
                         try
                         {
-                            int colCount = row.Cells.Count;
-                            for (int colIdx = 1; colIdx <= colCount; colIdx++)
+                            if (allFields[i].Type == WdFieldType.wdFieldSequence)
                             {
-                                var cell = tbl.Cell(rowIdx, colIdx);
-                                // 只清除没有图片的单元格
-                                if (cell.Range.InlineShapes.Count > 0)
+                                // 只删除位于 startRow 之后的域
+                                if (allFields[i].Result.Start >= rangeStartPos)
                                 {
-                                    continue;
-                                }
-                                
-                                // 如果该行原来有列表格式编号，直接清除
-                                if (hadNumbering)
-                                {
-                                    cell.Range.Text = "";
-                                    continue;
-                                }
-                                
-                                // 检查是否为纯文本形式的序号（如 "1.", "2)", "3" 等）
-                                string cellText = cell.Range.Text ?? "";
-                                cellText = cellText.Replace("\r", "").Replace("\n", "")
-                                    .Replace("\t", "").Replace("\a", "").Replace("\u00A0", "").Trim();
-                                
-                                if (!string.IsNullOrEmpty(cellText) && char.IsDigit(cellText[0]))
-                                {
-                                    bool isNumberOnly = true;
-                                    foreach (char c in cellText)
+                                    // 在删除第一个域前，检测对齐方式
+                                    if (originalAlignment == 0)
                                     {
-                                        if (!char.IsDigit(c) && c != '.' && c != ')' && c != '(' && c != '-' && c != ' ')
+                                        try
                                         {
-                                            isNumberOnly = false;
-                                            break;
+                                            var paraAlignment = allFields[i].Result.ParagraphFormat.Alignment;
+                                            switch (paraAlignment)
+                                            {
+                                                case WdParagraphAlignment.wdAlignParagraphCenter: originalAlignment = 2; break;
+                                                case WdParagraphAlignment.wdAlignParagraphRight: originalAlignment = 3; break;
+                                                default: originalAlignment = 1; break;
+                                            }
                                         }
+                                        catch { originalAlignment = 2; }
                                     }
-                                    if (isNumberOnly)
-                                    {
-                                        cell.Range.Text = "";
-                                    }
+                                    allFields[i].Delete();
                                 }
                             }
                         }
-                        catch
-                        {
-                            // 忽略单元格清理错误
-                        }
-                    }
-                    catch
-                    {
-                        // 忽略错误
+                        catch { }
                     }
                 }
+                catch { }
+
+                // === 第2步：逐行清理残留文本（域删除后的 "."、纯文本编号等） ===
+                int colCount = tbl.Columns.Count;
+                int progressInterval = totalRows < 50 ? 5 : (totalRows < 200 ? 10 : 20);
+
+                for (int rowIdx = clearStartRow; rowIdx <= totalRows; rowIdx++)
+                {
+                    try
+                    {
+                        // 跳过合并单元格行（如文件夹名称标题行）
+                        if (tbl.Rows[rowIdx].Cells.Count < colCount) continue;
+
+                        for (int colIdx = 1; colIdx <= colCount; colIdx++)
+                        {
+                            try
+                            {
+                                Range cellRange = tbl.Cell(rowIdx, colIdx).Range;
+
+                                // 跳过有图片的单元格
+                                if (cellRange.InlineShapes.Count > 0) continue;
+
+                                // 读取单元格纯文本
+                                string cellText = CleanCellText(cellRange.Text);
+                                if (string.IsNullOrEmpty(cellText)) continue;
+
+                                // 排除 end-of-cell marker 后再操作文本
+                                cellRange.SetRange(cellRange.Start, cellRange.End - 1);
+
+                                // 情况1：只剩 "." 或 ". " 或纯点号空格（SEQ域删除后的残留）
+                                string stripped = cellText.TrimEnd('.', ' ');
+                                if (string.IsNullOrEmpty(stripped) || cellText == "." || cellText == ". ")
+                                {
+                                    cellRange.Text = "";
+                                    continue;
+                                }
+
+                                // 情况2：纯文本编号（如 "1."、"2)"、"12"）
+                                int? number = ExtractNumberFromCellText(cellText);
+                                if (number.HasValue)
+                                {
+                                    string trimmed = cellText.TrimEnd('.', ')', ' ');
+                                    int dummy;
+                                    if (int.TryParse(trimmed, out dummy))
+                                    {
+                                        // 纯编号，检测对齐后清空
+                                        if (originalAlignment == 0)
+                                        {
+                                            try
+                                            {
+                                                var paraAlignment = cellRange.ParagraphFormat.Alignment;
+                                                switch (paraAlignment)
+                                                {
+                                                    case WdParagraphAlignment.wdAlignParagraphCenter: originalAlignment = 2; break;
+                                                    case WdParagraphAlignment.wdAlignParagraphRight: originalAlignment = 3; break;
+                                                    default: originalAlignment = 1; break;
+                                                }
+                                            }
+                                            catch { originalAlignment = 2; }
+                                        }
+                                        cellRange.Text = "";
+                                    }
+                                    else
+                                    {
+                                        // 编号+文件名（如 "1. photo1"），只去掉编号前缀
+                                        var match = Regex.Match(cellText, @"^\d+[.\)]\s*");
+                                        if (match.Success)
+                                        {
+                                            cellRange.Text = cellText.Substring(match.Length);
+                                        }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+
+                        if (progressCallback != null && rowIdx % progressInterval == 0)
+                        {
+                            progressCallback($"正在清除编号... ({rowIdx}/{totalRows})");
+                        }
+                    }
+                    catch { }
+                }
             }
-            catch
+            catch { }
+            finally
             {
-                // 忽略错误
+                try
+                {
+                    if (app != null) app.ScreenUpdating = wasScreenUpdating;
+                }
+                catch { }
             }
 
             return originalAlignment;
         }
 
         /// <summary>
-        /// 在描述行添加自动编号
+        /// 在描述行添加自动编号（使用 Word SEQ 域代码方式）
+        /// 核心逻辑：前一行有图片 且 当前行无图片 → 当前行是描述行，需要编号
         /// </summary>
-        public static void AddNumberingToDescriptionRows(Table tbl, Document doc, 
-            int startRow = 1, int alignment = 1, bool needAutoNumbering = false)
+        /// <param name="tbl">表格对象</param>
+        /// <param name="doc">文档对象</param>
+        /// <param name="startRow">开始行</param>
+        /// <param name="alignment">对齐方式</param>
+        /// <param name="needAutoNumbering">是否需要自动编号</param>
+        /// <param name="progressCallback">进度回调</param>
+        public static void AddNumberingToDescriptionRows(Table tbl, Document doc,
+            int startRow = 1, int alignment = 1, bool needAutoNumbering = false, Action<string> progressCallback = null)
         {
             if (tbl == null || doc == null || !needAutoNumbering) return;
 
             try
             {
-                // 找到包含图片的最后一行
-                int lastImageRow = 0;
-                int consecutiveEmptyRows = 0;
+                // 计算起始编号（延续已有编号）
+                int startNumber = 1;
+                if (startRow > 1)
+                {
+                    startNumber = CalculateNextSequenceNumber(tbl, startRow);
+                }
 
-                for (int rowIdx = startRow; rowIdx <= tbl.Rows.Count; rowIdx++)
+                // 对齐方式转换
+                WdParagraphAlignment wdAlignment;
+                switch (alignment)
+                {
+                    case 2:
+                        wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter;
+                        break;
+                    case 3:
+                        wdAlignment = WdParagraphAlignment.wdAlignParagraphRight;
+                        break;
+                    default:
+                        wdAlignment = WdParagraphAlignment.wdAlignParagraphLeft;
+                        break;
+                }
+
+                bool isFirstSeqField = true;
+                int colCount = tbl.Columns.Count;
+                int totalRows = tbl.Rows.Count;
+
+                // 计算进度更新间隔
+                int progressInterval = totalRows < 50 ? 5 : (totalRows < 200 ? 10 : 20);
+
+                // 单遍扫描 + 编号
+                bool prevRowHasImages = false;
+
+                for (int rowIdx = startRow; rowIdx <= totalRows; rowIdx++)
                 {
                     try
                     {
-                        int colCount = tbl.Rows[rowIdx].Cells.Count;
-                        if (colCount >= 2)
-                        {
-                            bool hasImage = tbl.Cell(rowIdx, 1).Range.InlineShapes.Count > 0 ||
-                                          tbl.Cell(rowIdx, 2).Range.InlineShapes.Count > 0;
-
-                            if (hasImage)
-                            {
-                                lastImageRow = rowIdx;
-                                consecutiveEmptyRows = 0;
-                            }
-                            else
-                            {
-                                consecutiveEmptyRows++;
-                                if (consecutiveEmptyRows >= 2 && lastImageRow > 0)
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // 忽略错误
-                    }
-                }
-
-                if (lastImageRow == 0) return;
-
-                int endRow = Math.Min(lastImageRow + 1, tbl.Rows.Count);
-
-                // 计算编号起始值：查找 startRow 之前已有的编号，延续编号
-                int numberStartAt = 1;
-                if (startRow > 1)
-                {
-                    for (int checkRow = startRow - 1; checkRow >= 1; checkRow--)
-                    {
+                        // 跳过合并单元格行（如文件夹名称标题行）
+                        bool isMergedRow = false;
                         try
                         {
-                            int checkColCount = tbl.Rows[checkRow].Cells.Count;
-                            if (checkColCount < 2) continue;
+                            if (tbl.Rows[rowIdx].Cells.Count < colCount)
+                            {
+                                isMergedRow = true;
+                            }
+                        }
+                        catch { isMergedRow = true; }
 
-                            // 从右往左查找最后一个有编号的单元格，获取其编号值
-                            for (int col = checkColCount; col >= 1; col--)
+                        if (isMergedRow)
+                        {
+                            prevRowHasImages = false;
+                            continue;
+                        }
+
+                        // 检查当前行是否有图片（找到第一个就 break）
+                        bool currentRowHasImages = false;
+                        for (int c = 1; c <= colCount; c++)
+                        {
+                            try
+                            {
+                                if (tbl.Cell(rowIdx, c).Range.InlineShapes.Count > 0)
+                                {
+                                    currentRowHasImages = true;
+                                    break;  // 找到一个就够了
+                                }
+                            }
+                            catch { }
+                        }
+
+                        // 判断是否为描述行：前一行有图片 且 当前行无图片
+                        if (!currentRowHasImages && prevRowHasImages)
+                        {
+                            // 为描述行的每个单元格插入 SEQ 域
+                            for (int colIdx = 1; colIdx <= colCount; colIdx++)
                             {
                                 try
                                 {
-                                    var cellRange = tbl.Cell(checkRow, col).Range;
-                                    if (cellRange.ListFormat.ListType != WdListType.wdListNoNumbering)
-                                    {
-                                        int listValue = cellRange.ListFormat.ListValue;
-                                        if (listValue > 0)
-                                        {
-                                            numberStartAt = listValue + 1;
-                                        }
-                                        break;
-                                    }
+                                    InsertSeqField(tbl, rowIdx, colIdx, wdAlignment, ref isFirstSeqField, startNumber);
                                 }
                                 catch { }
                             }
-
-                            if (numberStartAt > 1) break;
                         }
-                        catch { }
-                    }
-                }
 
-                // 创建自定义列表模板
-                ListTemplate sharedListTemplate = null;
-                bool isFirstDescriptionRow = true;
+                        prevRowHasImages = currentRowHasImages;
 
-                // 遍历并添加编号
-                for (int rowIdx = startRow; rowIdx <= endRow; rowIdx++)
-                {
-                    try
-                    {
-                        int colCount = tbl.Rows[rowIdx].Cells.Count;
-                        if (colCount < 2) continue;
-
-                        // 检查是否是描述行
-                        bool cell1HasImage = tbl.Cell(rowIdx, 1).Range.InlineShapes.Count > 0;
-                        bool cell2HasImage = tbl.Cell(rowIdx, 2).Range.InlineShapes.Count > 0;
-
-                        if (!cell1HasImage && !cell2HasImage)
+                        // 进度回调
+                        if (progressCallback != null && (rowIdx - startRow) % progressInterval == 0)
                         {
-                            // 检查前一行是否有图片
-                            bool prevRowHasImage = false;
-                            if (rowIdx > startRow)
-                            {
-                                try
-                                {
-                                    prevRowHasImage = tbl.Cell(rowIdx - 1, 1).Range.InlineShapes.Count > 0 ||
-                                                     tbl.Cell(rowIdx - 1, 2).Range.InlineShapes.Count > 0;
-                                }
-                                catch
-                                {
-                                    // 忽略错误
-                                }
-                            }
-
-                            if (prevRowHasImage || rowIdx == startRow + 1)
-                            {
-                                // 这是描述行，添加编号
-                                var rowRange = tbl.Rows[rowIdx].Range;
-
-                                if (isFirstDescriptionRow)
-                                {
-                                    // 创建新列表模板，使用计算的起始编号值
-                                    var customListTemplate = doc.ListTemplates.Add(true);
-                                    var level = customListTemplate.ListLevels[1];
-                                    level.NumberFormat = "%1.";
-                                    level.TrailingCharacter = WdTrailingCharacter.wdTrailingTab;
-                                    level.NumberStyle = WdListNumberStyle.wdListNumberStyleArabic;
-                                    level.StartAt = numberStartAt;
-
-                                    rowRange.ListFormat.ApplyListTemplate(
-                                        customListTemplate, 
-                                        ContinuePreviousList: false, 
-                                        ApplyTo: WdListApplyTo.wdListApplyToWholeList);
-                                    sharedListTemplate = customListTemplate;
-                                    isFirstDescriptionRow = false;
-                                }
-                                else if (sharedListTemplate != null)
-                                {
-                                    rowRange.ListFormat.ApplyListTemplate(
-                                        sharedListTemplate,
-                                        ContinuePreviousList: true,
-                                        ApplyTo: WdListApplyTo.wdListApplyToWholeList);
-                                }
-
-                                // 设置对齐方式
-                                WdParagraphAlignment wdAlignment;
-                                switch (alignment)
-                                {
-                                    case 2:
-                                        wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter;
-                                        break;
-                                    case 3:
-                                        wdAlignment = WdParagraphAlignment.wdAlignParagraphRight;
-                                        break;
-                                    default:
-                                        wdAlignment = WdParagraphAlignment.wdAlignParagraphLeft;
-                                        break;
-                                }
-                                rowRange.ParagraphFormat.Alignment = wdAlignment;
-                            }
+                            progressCallback($"正在添加编号... ({rowIdx}/{totalRows})");
                         }
                     }
                     catch
                     {
-                        // 忽略单行错误
+                        prevRowHasImages = false;
                     }
                 }
+
+                // 更新域：增量模式只更新 startRow 之后的范围
+                try
+                {
+                    if (startRow > 1)
+                    {
+                        // 增量模式：缩小更新范围，只更新 startRow 之后的域
+                        Range updateRange = tbl.Cell(startRow, 1).Range;
+                        updateRange.SetRange(updateRange.Start, tbl.Range.End);
+                        updateRange.Fields.Update();
+                    }
+                    else
+                    {
+                        // 全表模式
+                        tbl.Range.Fields.Update();
+                    }
+                }
+                catch { }
             }
             catch
             {
                 // 忽略错误
             }
+        }
+
+        /// <summary>
+        /// 计算下一个 SEQ 编号起始值
+        /// </summary>
+        private static int CalculateNextSequenceNumber(Table tbl, int startRow)
+        {
+            int maxNumber = 0;
+            int tableColCount = tbl.Columns.Count;
+
+            for (int checkRow = startRow - 1; checkRow >= 1; checkRow--)
+            {
+                try
+                {
+                    int checkColCount = tbl.Rows[checkRow].Cells.Count;
+                    // 跳过合并单元格行（如文件夹标题行），避免误读标题文本中的数字
+                    if (checkColCount < tableColCount) continue;
+
+                    // 从右往左查找最后一个有编号的单元格
+                    for (int col = checkColCount; col >= 1; col--)
+                    {
+                        try
+                        {
+                            var cell = tbl.Cell(checkRow, col);
+
+                            // 优先检查 SEQ 域
+                            int? seqNumber = ExtractSeqNumberFromCell(cell);
+                            if (seqNumber.HasValue && seqNumber.Value > maxNumber)
+                            {
+                                maxNumber = seqNumber.Value;
+                            }
+
+                            // 兼容检查纯文本编号（仅匹配纯编号格式如 "1."、"2)"、"3"）
+                            if (maxNumber == 0)
+                            {
+                                string cellText = CleanCellText(cell.Range.Text);
+                                if (!string.IsNullOrEmpty(cellText))
+                                {
+                                    // 只匹配纯数字或 "数字." / "数字)" 格式，排除 "336-glass bottles" 等文件夹标题
+                                    string trimmed = cellText.TrimEnd('.', ')', ' ');
+                                    int parsedNumber;
+                                    if (int.TryParse(trimmed, out parsedNumber) && parsedNumber > maxNumber)
+                                    {
+                                        maxNumber = parsedNumber;
+                                    }
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (maxNumber > 0) break;
+                }
+                catch { }
+            }
+
+            return maxNumber > 0 ? maxNumber + 1 : 1;
+        }
+
+        /// <summary>
+        /// 从单元格中提取 SEQ 域的编号值
+        /// </summary>
+        private static int? ExtractSeqNumberFromCell(Cell cell)
+        {
+            try
+            {
+                foreach (Field field in cell.Range.Fields)
+                {
+                    if (field.Type == WdFieldType.wdFieldSequence)
+                    {
+                        string resultText = field.Result?.Text;
+                        if (!string.IsNullOrEmpty(resultText))
+                        {
+                            // 提取数字部分
+                            var match = Regex.Match(resultText.Trim(), @"^(\d+)");
+                            if (match.Success && int.TryParse(match.Groups[1].Value, out int number))
+                            {
+                                return number;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 在指定单元格插入 SEQ 域
+        /// </summary>
+        private static void InsertSeqField(Table tbl, int rowIdx, int colIdx,
+            WdParagraphAlignment alignment, ref bool isFirstSeqField, int startNumber)
+        {
+            try
+            {
+                // 1. 获取单元格 Range 和起止位置（只获取一次 Cell，后续复用位置信息）
+                Range cellRange = tbl.Cell(rowIdx, colIdx).Range;
+                int cellStart = cellRange.Start;
+                int cellEnd = cellRange.End - 1; // 排除 end-of-cell marker
+        
+                // 2. 读取现有文本（复用 cellRange）
+                cellRange.SetRange(cellStart, cellEnd);
+                string existingText = CleanCellText(cellRange.Text);
+        
+                // 3. 清理原内容：去掉编号前缀和残留的点号，只保留文件名
+                if (!string.IsNullOrEmpty(existingText))
+                {
+                    // 先去掉编号前缀（如 "1. ", "2) "）
+                    existingText = Regex.Replace(existingText, @"^\d+[.)\]\s*", "");
+                    // 再去掉残留的点号和空格（如刷新编号后留下的 ". " 或 "."）
+                    existingText = existingText.TrimStart('.', ' ');
+                }
+        
+                // 4. 清空单元格内容（复用 cellRange）
+                cellRange.SetRange(cellStart, cellEnd);
+                cellRange.Text = "";
+        
+                // 5. 构建 SEQ 域参数
+                string fieldText;
+                if (isFirstSeqField && startNumber > 1)
+                {
+                    fieldText = $"PhotoNum \\r {startNumber}";
+                }
+                else
+                {
+                    fieldText = "PhotoNum";
+                }
+        
+                // 6. 在单元格起始位置插入 SEQ 域
+                // 插入域后 Range 会失效，需要重新定位
+                cellRange.SetRange(cellStart, cellStart);
+                cellRange.Fields.Add(cellRange, WdFieldType.wdFieldSequence, fieldText, false);
+                isFirstSeqField = false;
+        
+                // 7. 在域后追加 "." 和文件名（域插入后必须重新获取 Range）
+                Range afterField = tbl.Cell(rowIdx, colIdx).Range;
+                afterField.SetRange(afterField.End - 1, afterField.End - 1);
+        
+                if (!string.IsNullOrEmpty(existingText))
+                {
+                    afterField.Text = ". " + existingText;
+                }
+                else
+                {
+                    afterField.Text = ".";
+                }
+        
+                // 8. 设置单元格格式（需要重新获取 Range）
+                Range fullRange = tbl.Cell(rowIdx, colIdx).Range;
+                fullRange.SetRange(fullRange.Start, fullRange.End - 1);
+                fullRange.ParagraphFormat.Alignment = alignment;
+                tbl.Cell(rowIdx, colIdx).VerticalAlignment = WdCellVerticalAlignment.wdCellAlignVerticalCenter;
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 从单元格文本中提取编号值（如 "1." 提取出 1）
+        /// </summary>
+        private static int? ExtractNumberFromCellText(string cellText)
+        {
+            if (string.IsNullOrEmpty(cellText)) return null;
+
+            // 匹配以数字开头，后跟点号或括号的格式（如 "1.", "2)", "3 " 等）
+            var match = Regex.Match(cellText, @"^(\d+)");
+            if (match.Success)
+            {
+                if (int.TryParse(match.Groups[1].Value, out int number))
+                {
+                    return number;
+                }
+            }
+            return null;
         }
 
         #endregion

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Word;
@@ -25,6 +26,7 @@ namespace WordTools.Services
         private int _refreshInterval = 10;
         private int _memoryCleanInterval = 50;
         private int _saveInterval = 200;
+        private int _fullGcInterval;  // 全代 GC 间隔
 
         // 性能模式备份
         private bool _originalScreenUpdating;
@@ -87,9 +89,9 @@ namespace WordTools.Services
                     doc.GrammarChecked = true;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[ProgressService] Error: {ex.Message}");
             }
         }
 
@@ -116,24 +118,37 @@ namespace WordTools.Services
         /// </summary>
         private int GetOptimizedRefreshInterval(int totalFiles)
         {
-            if (totalFiles < 50) return 5;
-            if (totalFiles < 200) return 10;
-            if (totalFiles < 500) return 20;
-            if (totalFiles < 1000) return 50;
-            if (totalFiles < 2000) return 100;
-            return 200;
+            if (totalFiles < 30) return 10;
+            if (totalFiles < 100) return 15;
+            return 20;
         }
 
         /// <summary>
-        /// 清理内存
+        /// 清理内存（分级 GC 策略）
         /// </summary>
-        private void CleanupMemory()
+        private void CleanupMemory(int processedCount)
         {
             try
             {
                 System.Windows.Forms.Application.DoEvents();
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
+
+                // 内存水位检查：超过 500MB 时强制全代回收
+                if (GC.GetTotalMemory(false) > 500 * 1024 * 1024)
+                {
+                    GC.Collect(2);
+                    GC.WaitForPendingFinalizers();
+                }
+                else if (processedCount % _fullGcInterval == 0)
+                {
+                    // 定期全代回收（防止大对象堆膨胀）
+                    GC.Collect(2);
+                    GC.WaitForPendingFinalizers();
+                }
+                else
+                {
+                    // 常规第0代快速回收
+                    GC.Collect(0);
+                }
             }
             catch
             {
@@ -188,11 +203,12 @@ namespace WordTools.Services
                     TableService.SetTableFixedColumnWidth(tbl);
                 }
 
-                // 清除编号
+                // 清除 startRow 之后的编号（增量模式，不影响前面已有的编号）
                 TableService.ClearTableNumbering(tbl, startRow);
 
-                // 计算总文件数
-                int totalFiles = FileService.CountTotalImageFiles(folderPath, includeRootImages, includeSubFolderImages);
+                // 一次遍历获取图片文件列表和总数（避免重复扫描目录）
+                var imageFiles = FileService.GetImageFiles(folderPath, includeRootImages, includeSubFolderImages);
+                int totalFiles = imageFiles.TotalCount;
 
                 if (totalFiles == 0)
                 {
@@ -200,13 +216,17 @@ namespace WordTools.Services
                     return;
                 }
 
-                // 显示提示
-                MessageBox.Show(string.Format("开始插入图片...\n\n提示：插入过程中可以按 ESC 键随时取消操作。\n\n共找到 {0} 张图片。", totalFiles),
-                    "批量插图", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                // 显示提示（仅当图片数量超过20时）
+                if (totalFiles > 20)
+                {
+                    MessageBox.Show(string.Format("开始插入图片...\n\n提示：插入过程中可以按 ESC 键随时取消操作。\n\n共找到 {0} 张图片。", totalFiles),
+                        "批量插图", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
 
                 // 设置优化参数
                 _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
-                _memoryCleanInterval = _refreshInterval * 5;
+                _memoryCleanInterval = _refreshInterval * 10;
+                _fullGcInterval = _memoryCleanInterval * 5;
                 _saveInterval = _refreshInterval * 20;
 
                 // 进入高性能模式
@@ -222,31 +242,28 @@ namespace WordTools.Services
                 string rootFolderName = FileService.GetFolderName(folderPath);
 
                 // 处理根目录图片
-                if (includeRootImages)
+                if (includeRootImages && imageFiles.RootFiles != null && imageFiles.RootFiles.Length > 0)
                 {
-                    var rootFiles = FileService.GetRootImageFiles(folderPath);
-                    if (rootFiles.Length > 0)
-                    {
-                        // 创建标题行
-                        TableService.CreateTitleRow(tbl, ref rowIndex, rootFolderName);
+                    // 创建标题行
+                    TableService.CreateTitleRow(tbl, ref rowIndex, rootFolderName);
 
-                        // 处理文件
-                        ProcessFileBatch(rootFiles, tbl, ref rowIndex, minHeight, needDescription,
-                            useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                            totalFiles, startTime);
-                    }
+                    // 处理文件
+                    ProcessFileBatch(imageFiles.RootFiles, tbl, ref rowIndex, minHeight, needDescription,
+                        useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
+                        totalFiles, startTime);
                 }
 
                 // 处理子文件夹
-                if (includeSubFolderImages)
+                if (includeSubFolderImages && imageFiles.SubfolderFiles != null)
                 {
-                    var subfolders = FileService.GetSubfolders(folderPath);
-                    foreach (var subfolder in subfolders)
+                    var subfolderKeys = new System.Collections.Generic.List<string>(imageFiles.SubfolderFiles.Keys);
+                    foreach (var subfolder in subfolderKeys)
                     {
                         if (ShouldCancel()) break;
 
-                        var subFiles = FileService.GetRootImageFiles(subfolder);
-                        if (subFiles.Length > 0)
+                        string[] subFiles = imageFiles.SubfolderFiles[subfolder];
+
+                        if (subFiles != null && subFiles.Length > 0)
                         {
                             string subfolderName = FileService.GetFolderName(subfolder);
                             TableService.CreateTitleRow(tbl, ref rowIndex, subfolderName);
@@ -254,6 +271,9 @@ namespace WordTools.Services
                             ProcessFileBatch(subFiles, tbl, ref rowIndex, minHeight, needDescription,
                                 useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
                                 totalFiles, startTime);
+
+                            // 释放引用，帮助垃圾回收
+                            imageFiles.SubfolderFiles[subfolder] = null;
                         }
                     }
                 }
@@ -285,7 +305,10 @@ namespace WordTools.Services
             }
             finally
             {
-                // 添加编号
+                // 先退出高性能模式，恢复屏幕更新
+                ExitHighPerformanceMode();
+
+                // 再添加编号（此时 ScreenUpdating=true，用户能看到进度）
                 if (needAutoNumbering && startRow > 0 && tbl != null)
                 {
                     try
@@ -299,8 +322,16 @@ namespace WordTools.Services
                     }
                 }
 
-                // 退出高性能模式
-                ExitHighPerformanceMode();
+                // 确保域代码不可见（显示域结果而非代码）
+                try
+                {
+                    if (_application.ActiveDocument != null && _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
+                    {
+                        _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
+                    }
+                }
+                catch { }
+
                 _application.StatusBar = "";
             }
         }
@@ -352,6 +383,9 @@ namespace WordTools.Services
                 int totalFiles = files.Length;
                 _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
 
+                // 清除 startRow 之后的编号（增量模式，不影响前面已有的编号）
+                TableService.ClearTableNumbering(tbl, startRow);
+
                 EnterHighPerformanceMode();
 
                 _application.StatusBar = string.Format("准备插入 {0} 张图片...", totalFiles);
@@ -383,7 +417,10 @@ namespace WordTools.Services
             }
             finally
             {
-                // 添加编号
+                // 先退出高性能模式，恢复屏幕更新
+                ExitHighPerformanceMode();
+
+                // 再添加编号（此时 ScreenUpdating=true，用户能看到进度）
                 if (needAutoNumbering && startRow > 0 && tbl != null)
                 {
                     try
@@ -397,7 +434,16 @@ namespace WordTools.Services
                     }
                 }
 
-                ExitHighPerformanceMode();
+                // 确保域代码不可见（显示域结果而非代码）
+                try
+                {
+                    if (_application.ActiveDocument != null && _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
+                    {
+                        _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
+                    }
+                }
+                catch { }
+
                 _application.StatusBar = "";
             }
         }
@@ -438,7 +484,12 @@ namespace WordTools.Services
                     // 确保行存在
                     if (rowIndex > tbl.Rows.Count)
                     {
+                        int rowCountBefore = tbl.Rows.Count;
                         tbl.Rows.Add();
+                        if (tbl.Rows.Count <= rowCountBefore)
+                        {
+                            throw new InvalidOperationException("Failed to add new row to table.");
+                        }
                     }
 
                     int colIndex = expectedCol;
@@ -505,13 +556,12 @@ namespace WordTools.Services
                 // 定期清理内存
                 if (processedCount % _memoryCleanInterval == 0)
                 {
-                    CleanupMemory();
+                    CleanupMemory(processedCount);
                 }
             }
 
-            // 处理最后一行
-            int batchSize = files.Length;
-            if (batchSize % 2 != 0)
+            // 处理最后一行（如果文件数量为奇数，需要填充空单元格）
+            if (files.Length % 2 != 0)
             {
                 TableService.FillEmptyCellsWithNA(tbl, rowIndex, 2, 2);
             }

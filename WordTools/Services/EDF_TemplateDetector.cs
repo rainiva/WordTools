@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Word = Microsoft.Office.Interop.Word;
 
@@ -31,8 +32,6 @@ namespace WordTools.Services
             public int ItemColumn { get; set; }          // Item值所在列
             public int DataColumn { get; set; }          // 数据填充目标列
             public int ItemRowOffset { get; set; }       // Item值相对锚定行的行偏移
-            public bool HasSampleSize { get; set; }      // 是否包含Sample Size
-            public string SampleSizeRegex { get; set; }  // Sample Size正则表达式
 
             public TemplateInfo()
             {
@@ -40,8 +39,6 @@ namespace WordTools.Services
                 ItemColumn = 2;
                 DataColumn = 2;
                 ItemRowOffset = 0;
-                HasSampleSize = false;
-                SampleSizeRegex = "";
             }
         }
 
@@ -57,8 +54,9 @@ namespace WordTools.Services
                 text = text.Replace("\r\a", "");
                 return text;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[EDF_TemplateDetector] Error: {ex.Message}");
                 return "";
             }
         }
@@ -68,6 +66,12 @@ namespace WordTools.Services
         /// </summary>
         public static TemplateInfo DetectTemplate(Word.Table tbl, int anchorRow, string anchorField)
         {
+            // 空引用检查
+            if (tbl == null)
+            {
+                return new TemplateInfo();
+            }
+
             TemplateInfo result = new TemplateInfo();
 
             // 获取锚定单元格内容
@@ -79,8 +83,6 @@ namespace WordTools.Services
                 result.TemplateType = TemplateType.StructureB;
                 result.ItemColumn = 1;
                 result.DataColumn = 1;
-                result.HasSampleSize = anchorText.IndexOf("Sample Size", StringComparison.OrdinalIgnoreCase) >= 0;
-                result.SampleSizeRegex = "Sample Size[=:]?\\s*(\\d+)";
             }
             else if (IsStructureC(tbl, anchorRow, anchorText))
             {
@@ -170,7 +172,8 @@ namespace WordTools.Services
             }
 
             // 检查下一行是否存在且第一列看起来像Item值
-            if (row < tbl.Rows.Count)
+            // Word表格行索引从1开始，所以检查 row + 1 <= tbl.Rows.Count
+            if (row + 1 <= tbl.Rows.Count)
             {
                 string nextRowText = GetCellText(tbl.Cell(row + 1, 1)).Trim();
 
@@ -242,8 +245,9 @@ namespace WordTools.Services
 
                 return "";
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[EDF_TemplateDetector] Error: {ex.Message}");
                 return "";
             }
         }
@@ -259,8 +263,9 @@ namespace WordTools.Services
                 Regex regex = new Regex(@"^[A-Z0-9\-]+$", RegexOptions.IgnoreCase);
                 return regex.IsMatch(text.Trim());
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[EDF_TemplateDetector] Error: {ex.Message}");
                 return false;
             }
         }

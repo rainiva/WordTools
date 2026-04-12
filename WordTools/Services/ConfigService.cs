@@ -23,6 +23,10 @@ namespace WordTools.Services
         // 注册表路径
         private const string REGISTRY_PATH = @"Software\WordTools";
 
+        // Office 属性类型常量 (MsoDocProperties)
+        // msoPropertyTypeString = 4, 表示字符串类型的文档属性
+        private const int MsoPropertyTypeString = 4;
+
         #region 文档属性操作
 
         /// <summary>
@@ -40,7 +44,7 @@ namespace WordTools.Services
                 for (int i = 1; i <= count; i++)
                 {
                     dynamic prop = properties.Item(i);
-                    if ((string)prop.Name == propertyName)
+                    if (prop.Name?.ToString() == propertyName)
                     {
                         return prop.Value != null ? prop.Value.ToString() : defaultValue;
                     }
@@ -70,7 +74,7 @@ namespace WordTools.Services
                 for (int i = 1; i <= count; i++)
                 {
                     dynamic prop = properties.Item(i);
-                    if ((string)prop.Name == propertyName)
+                    if (prop.Name?.ToString() == propertyName)
                     {
                         prop.Value = value;
                         found = true;
@@ -82,7 +86,7 @@ namespace WordTools.Services
                 // msoPropertyTypeString = 4
                 if (!found)
                 {
-                    properties.Add(propertyName, false, 4, value);
+                    properties.Add(propertyName, false, MsoPropertyTypeString, value);
                 }
             }
             catch

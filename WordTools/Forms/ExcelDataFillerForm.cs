@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using WordTools.Services;
@@ -248,7 +249,10 @@ namespace WordTools.Forms
                 txtSampleSizeColumn.Text = ConfigService.GetEdfSampleSizeColumn(doc);
                 chkReplaceSampleSize.Checked = ConfigService.GetEdfReplaceSampleSize(doc);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LoadDefaultConfig error: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -373,8 +377,7 @@ namespace WordTools.Forms
                 return false;
             }
 
-            int targetColumn;
-            if (string.IsNullOrWhiteSpace(txtTargetColumn.Text) || !int.TryParse(txtTargetColumn.Text, out targetColumn))
+            if (string.IsNullOrWhiteSpace(txtTargetColumn.Text) || !int.TryParse(txtTargetColumn.Text, out int _))
             {
                 MessageBox.Show("请输入有效的目标列数字！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtTargetColumn.Focus();
@@ -405,7 +408,10 @@ namespace WordTools.Forms
                 ConfigService.SaveEdfSampleSizeColumn(txtSampleSizeColumn.Text.Trim(), doc);
                 ConfigService.SaveEdfReplaceSampleSize(chkReplaceSampleSize.Checked, doc);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"SaveCurrentConfig error: {ex.Message}");
+            }
         }
 
         /// <summary>
