@@ -1112,6 +1112,17 @@ namespace WordTools.Services
                 int totalRows = tbl.Rows.Count;
                 clearStartRow = Math.Min(clearStartRow, totalRows);
 
+                // 优化：如果表格中完全没有 InlineShapes，不需要做任何清理
+                // 这处理了空表或全文本表格的情况
+                try
+                {
+                    if (tbl.Range.InlineShapes.Count == 0)
+                    {
+                        return 0; // 没有图片，不需要清理描述行
+                    }
+                }
+                catch { }
+
                 // 获取 startRow 对应的文档位置，用于判断域是否在清除范围内
                 int rangeStartPos = 0;
                 try
@@ -1435,61 +1446,32 @@ namespace WordTools.Services
         /// <summary>
         /// 计算下一个 SEQ 编号起始值
         /// </summary>
-        public static int CalculateNextSequenceNumber(Table tbl, int startRow)
+        public static int CalculateNextSequenceNumber(Table tbl, int startRow, int tableColCount = 2)
         {
-            int maxNumber = 0;
-            int tableColCount = tbl.Columns.Count;
+            // 优化：如果 startRow <= 1，直接从 1 开始编号，无需搜索
+            if (startRow <= 1)
+            {
+                return 1;
+            }
 
-            // 优化2：限制向后搜索深度，避免在大表格中遍历过多行
-            const int MAX_SEARCH_DEPTH = 10;
-            int searchEnd = Math.Max(1, startRow - MAX_SEARCH_DEPTH);
-            for (int checkRow = startRow - 1; checkRow >= searchEnd; checkRow--)
+            // 极简化实现：只搜索最近2行，只用纯文本匹配
+            // 避免调用 ExtractNumberFromCell（它有 Fields 遍历开销）
+            for (int row = startRow - 1; row >= Math.Max(1, startRow - 2); row--)
             {
                 try
                 {
-                    int checkColCount = tbl.Rows[checkRow].Cells.Count;
-                    // 跳过合并单元格行（如文件夹标题行），避免误读标题文本中的数字
-                    if (checkColCount < tableColCount) continue;
-
-                    // 从右往左查找最后一个有编号的单元格
-                    for (int col = checkColCount; col >= 1; col--)
-                    {
-                        try
-                        {
-                            var cell = tbl.Cell(checkRow, col);
-
-                            // 优先检查 SEQ 域
-                            int? seqNumber = ExtractSeqNumberFromCell(cell);
-                            if (seqNumber.HasValue && seqNumber.Value > maxNumber)
-                            {
-                                maxNumber = seqNumber.Value;
-                            }
-
-                            // 兼容检查纯文本编号（仅匹配纯编号格式如 "1."、"2)"、"3"）
-                            if (maxNumber == 0)
-                            {
-                                string cellText = CleanCellText(cell.Range.Text);
-                                if (!string.IsNullOrEmpty(cellText))
-                                {
-                                    // 只匹配纯数字或 "数字." / "数字)" 格式，排除 "336-glass bottles" 等文件夹标题
-                                    string trimmed = cellText.TrimEnd('.', ')', ' ');
-                                    int parsedNumber;
-                                    if (int.TryParse(trimmed, out parsedNumber) && parsedNumber > maxNumber)
-                                    {
-                                        maxNumber = parsedNumber;
-                                    }
-                                }
-                            }
-                        }
-                        catch { }
-                    }
-
-                    if (maxNumber > 0) break;
+                    Cell cell = tbl.Cell(row, tableColCount);
+                    Range r = cell.Range;
+                    r.SetRange(r.Start, r.End - 1);
+                    string text = (r.Text ?? "").Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
+                    var m = Regex.Match(text, @"^(\d+)\.");
+                    if (m.Success) return int.Parse(m.Groups[1].Value) + 1;
                 }
                 catch { }
             }
 
-            return maxNumber > 0 ? maxNumber + 1 : 1;
+            // 如果最近2行没找到，返回1（从1开始编号）
+            return 1;
         }
 
         /// <summary>
@@ -1499,7 +1481,17 @@ namespace WordTools.Services
         {
             try
             {
-                // 先检查是否有 SEQ 域（向后兼容旧文档）
+                // 优化：先检查纯文本编号（快速路径，G方案文档）
+                // 纯文本检查比 Fields 遍历快得多
+                Range r = cell.Range;
+                r.SetRange(r.Start, r.End - 1);
+                string text = (r.Text ?? "").Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
+                var m = Regex.Match(text, @"^(\d+)\.");
+                if (m.Success && int.TryParse(m.Groups[1].Value, out int val))
+                    return val;
+                
+                // 再检查 SEQ 域（慢速路径，旧文档兼容）
+                // 注意：在 G 方案下大部分文档不会走到这里
                 foreach (Field f in cell.Range.Fields)
                 {
                     if (f.Type == WdFieldType.wdFieldSequence)
@@ -1513,14 +1505,6 @@ namespace WordTools.Services
                         }
                     }
                 }
-                // 纯文本模式：匹配 "3. xxx" 格式
-                Range r = cell.Range;
-                r.SetRange(r.Start, r.End - 1);
-                string text = r.Text ?? "";
-                text = text.Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
-                var m = Regex.Match(text, @"^(\d+)\.");
-                if (m.Success && int.TryParse(m.Groups[1].Value, out int val))
-                    return val;
             }
             catch { }
             return null;

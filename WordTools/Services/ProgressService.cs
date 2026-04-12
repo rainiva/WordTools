@@ -169,6 +169,9 @@ namespace WordTools.Services
             bool needAutoNumbering, int numberAlignment = 2)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            long t0 = 0, t1 = 0, t2 = 0, t3 = 0, t4 = 0, t5 = 0;
+            bool skippedClear = false;
             _isCancelled = false;
             int processedCount = 0;
             int successCount = 0;
@@ -204,8 +207,45 @@ namespace WordTools.Services
                     TableService.SetTableFixedColumnWidth(tbl);
                 }
 
+                t0 = sw.ElapsedMilliseconds;
+
                 // 清除 startRow 之后的编号（增量模式，不影响前面已有的编号）
-                TableService.ClearTableNumbering(tbl, startRow);
+                // 优化：只在 startRow 位于现有内容范围内且 startRow 之后有实际内容时才清理
+                // 如果 startRow 已经超出当前表格行数，说明是在末尾追加，新行为空无需清理
+                int currentRowCount = tbl.Rows.Count;
+                bool needClearNumbering = false;
+                if (startRow <= currentRowCount)
+                {
+                    // 超轻量检查：只检查 startRow 行第1列的文本内容（不含InlineShapes.Count）
+                    try
+                    {
+                        Range checkRange = tbl.Cell(startRow, 1).Range;
+                        checkRange.SetRange(checkRange.Start, checkRange.End - 1);
+                        string text = (checkRange.Text ?? "").Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
+                        // 检查文本是否以数字开头（已有编号）或包含图片标记
+                        bool hasContent = !string.IsNullOrEmpty(text);
+                        bool hasPictureMarker = text.IndexOf('\x01') >= 0; // 图片在Range.Text中表示为\x01
+                        
+                        // 如果 startRow 有内容（文本或图片标记），才需要清理编号
+                        if (hasContent || hasPictureMarker)
+                        {
+                            needClearNumbering = true;
+                        }
+                        // 注意：不再遍历 tbl.Range.InlineShapes 检查后续行，该操作在大表格中极慢（5-6秒）
+                        // 如果用户从中间插入，需要清理编号，可通过其他方式检测（如检查描述行是否有编号文本）
+                    }
+                    catch { needClearNumbering = true; } // 出错时保守处理，执行清理
+                }
+                
+                if (needClearNumbering)
+                {
+                    TableService.ClearTableNumbering(tbl, startRow);
+                }
+                else
+                {
+                    skippedClear = true;
+                }
+                t1 = sw.ElapsedMilliseconds;
 
                 // 一次遍历获取图片文件列表和总数（避免重复扫描目录）
                 var imageFiles = FileService.GetImageFiles(folderPath, includeRootImages, includeSubFolderImages);
@@ -247,10 +287,12 @@ namespace WordTools.Services
                 {
                     startNumber = TableService.CalculateNextSequenceNumber(tbl, startRow);
                 }
+                t2 = sw.ElapsedMilliseconds;
                 int currentNumber = startNumber;
 
                 // 预分配行数
                 ImageService.PreAllocateRows(tbl, totalFiles, 2, needDescription, _application);
+                t3 = sw.ElapsedMilliseconds;
 
                 _application.StatusBar = string.Format("准备插入 {0} 张图片...", totalFiles);
                 System.Windows.Forms.Application.DoEvents();
@@ -298,6 +340,9 @@ namespace WordTools.Services
                 // 完成
                 _application.StatusBar = string.Format("完成！成功: {0} 失败: {1}", successCount, failCount);
 
+                // 记录t4（图片插入完成时间）
+                t4 = sw.ElapsedMilliseconds;
+
                 // 显示完成消息
                 stopwatch.Stop();
                 double seconds = stopwatch.Elapsed.TotalSeconds;
@@ -305,19 +350,30 @@ namespace WordTools.Services
                     ? $"{(int)(seconds / 60)}分{seconds % 60:F1}秒"
                     : $"{seconds:F1}秒";
 
+                // 记录t5（最终时间）用于计算收尾耗时
+                t5 = sw.ElapsedMilliseconds;
+
+                string timeDetail = $"\n\n[诊断]\n" +
+                    $"初始化: {t0}ms\n" +
+                    $"清理编号: {t1 - t0}ms (跳过={skippedClear})\n" +
+                    $"计算起始号: {t2 - t1}ms\n" +
+                    $"预分配行: {t3 - t2}ms\n" +
+                    $"插入图片: {t4 - t3}ms\n" +
+                    $"收尾: {t5 - t4}ms";
+
                 if (_isCancelled)
                 {
-                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo), "提示",
+                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 else if (failCount > 0)
                 {
-                    MessageBox.Show(string.Format("图片插入完成！\n成功: {0} 张\n失败: {1} 张\n耗时: {2}", successCount, failCount, timeInfo), "完成",
+                    MessageBox.Show(string.Format("图片插入完成！\n成功: {0} 张\n失败: {1} 张\n耗时: {2}", successCount, failCount, timeInfo) + timeDetail, "完成",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    MessageBox.Show(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo), "完成",
+                    MessageBox.Show(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo) + timeDetail, "完成",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -328,6 +384,7 @@ namespace WordTools.Services
             }
             finally
             {
+
                 // 1. 先退出高性能模式，让用户立即看到已插入的图片
                 ExitHighPerformanceMode();
 
@@ -406,7 +463,37 @@ namespace WordTools.Services
                 _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
 
                 // 清除 startRow 之后的编号（增量模式，不影响前面已有的编号）
-                TableService.ClearTableNumbering(tbl, startRow);
+                // 优化：只在 startRow 位于现有内容范围内且 startRow 之后有实际内容时才清理
+                // 如果 startRow 已经超出当前表格行数，说明是在末尾追加，新行为空无需清理
+                int currentRowCount = tbl.Rows.Count;
+                bool needClearNumbering = false;
+                if (startRow <= currentRowCount)
+                {
+                    // 超轻量检查：只检查 startRow 行第1列的文本内容（不含InlineShapes.Count）
+                    try
+                    {
+                        Range checkRange = tbl.Cell(startRow, 1).Range;
+                        checkRange.SetRange(checkRange.Start, checkRange.End - 1);
+                        string text = (checkRange.Text ?? "").Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
+                        // 检查文本是否以数字开头（已有编号）或包含图片标记
+                        bool hasContent = !string.IsNullOrEmpty(text);
+                        bool hasPictureMarker = text.IndexOf('\x01') >= 0; // 图片在Range.Text中表示为\x01
+                        
+                        // 如果 startRow 有内容（文本或图片标记），才需要清理编号
+                        if (hasContent || hasPictureMarker)
+                        {
+                            needClearNumbering = true;
+                        }
+                        // 注意：不再遍历 tbl.Range.InlineShapes 检查后续行，该操作在大表格中极慢（5-6秒）
+                        // 如果用户从中间插入，需要清理编号，可通过其他方式检测（如检查描述行是否有编号文本）
+                    }
+                    catch { needClearNumbering = true; } // 出错时保守处理，执行清理
+                }
+                
+                if (needClearNumbering)
+                {
+                    TableService.ClearTableNumbering(tbl, startRow);
+                }
 
                 EnterHighPerformanceMode();
 
