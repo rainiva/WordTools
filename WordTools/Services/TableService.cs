@@ -490,8 +490,11 @@ namespace WordTools.Services
                 // 扫描从光标前一行开始（需判断“图片行→描述行”配对）
                 int scanStart = Math.Max(1, cursorRow - 1);
         
+                // 临时启用ScreenUpdating让状态栏可见
+                try { if (app != null) app.ScreenUpdating = true; } catch { }
                 progressCallback?.Invoke(string.Format("从第 {0} 行开始检查编号...", scanStart));
                 System.Windows.Forms.Application.DoEvents();
+                try { if (app != null) app.ScreenUpdating = false; } catch { }
         
                 // === Step 2: 扫描 SEQ 域（快速，只遍历 Fields） ===
                 var seqFieldsByRow = new Dictionary<int, List<Field>>();
@@ -545,12 +548,13 @@ namespace WordTools.Services
                     catch { firstBadIdx = i; break; }
                 }
 
-                // === 扫描全表 InlineShapes（为后续结构检查做准备）===
+                // === 扫描 InlineShapes（从 scanStart 开始，避免全表扫描）===
                 var imageRows = new HashSet<int>();
                 int shapeCount = 0;
                 try
                 {
-                    foreach (InlineShape shape in tbl.Range.InlineShapes)
+                    Range shapeScanRange = doc.Range(tbl.Cell(scanStart, 1).Range.Start, tbl.Range.End);
+                    foreach (InlineShape shape in shapeScanRange.InlineShapes)
                     {
                         try { imageRows.Add(shape.Range.Cells[1].RowIndex); }
                         catch { }
@@ -578,16 +582,35 @@ namespace WordTools.Services
                 {
                     // 值不连续，且没有遗漏的描述行 → 直接批量更新，跳过结构检查
                     int totalToUpdate = sortedRows.Count - firstBadIdx;
+                    // 临时启用ScreenUpdating让状态栏可见
+                    try { if (app != null) app.ScreenUpdating = true; } catch { }
                     progressCallback?.Invoke(string.Format("正在批量更新 {0} 个编号值...", totalToUpdate));
                     System.Windows.Forms.Application.DoEvents();
+                    try { if (app != null) app.ScreenUpdating = false; } catch { }
 
                     try
                     {
                         int firstBadRow = sortedRows[firstBadIdx];
-                        Range updateRange = doc.Range(
-                            tbl.Cell(firstBadRow, 1).Range.Start,
-                            tbl.Range.End);
-                        updateRange.Fields.Update();
+                        int batchSize = 50;
+                        for (int batchStart = firstBadRow; batchStart <= totalRows; batchStart += batchSize)
+                        {
+                            int batchEnd = Math.Min(batchStart + batchSize - 1, totalRows);
+                            try
+                            {
+                                Range batchRange = doc.Range(
+                                    tbl.Cell(batchStart, 1).Range.Start,
+                                    tbl.Cell(batchEnd, colCount).Range.End);
+                                batchRange.Fields.Update();
+                            }
+                            catch { }
+
+                            // 显示进度
+                            try { if (app != null) app.ScreenUpdating = true; } catch { }
+                            progressCallback?.Invoke(string.Format("正在更新编号... {0}/{1} 行",
+                                Math.Min(batchEnd, totalRows), totalRows));
+                            System.Windows.Forms.Application.DoEvents();
+                            try { if (app != null) app.ScreenUpdating = false; } catch { }
+                        }
                     }
                     catch { }
 
@@ -598,8 +621,11 @@ namespace WordTools.Services
 
                 // === 慢速路径：域值都正确或有遗漏的描述行，检查结构是否需要增删 ===
                 // 重要：结构检查必须从表格第1行开始，避免光标位置导致遍漏
+                // 临时启用ScreenUpdating让状态栏可见
+                try { if (app != null) app.ScreenUpdating = true; } catch { }
                 progressCallback?.Invoke("正在检查表格结构...");
                 System.Windows.Forms.Application.DoEvents();
+                try { if (app != null) app.ScreenUpdating = false; } catch { }
 
                 // 同时补全 SEQ 域信息（快速路径只扫描了光标之后的）
                 if (scanStart > 1)
@@ -628,11 +654,26 @@ namespace WordTools.Services
                         }
                     }
                     catch { }
+
+                    // 补全 scanStart 前的 InlineShapes
+                    try
+                    {
+                        Range preShapeRange = doc.Range(tbl.Range.Start, tbl.Cell(scanStart, 1).Range.Start);
+                        foreach (InlineShape shape in preShapeRange.InlineShapes)
+                        {
+                            try { imageRows.Add(shape.Range.Cells[1].RowIndex); }
+                            catch { }
+                        }
+                    }
+                    catch { }
                 }
 
+                // 临时启用ScreenUpdating让状态栏可见
+                try { if (app != null) app.ScreenUpdating = true; } catch { }
                 progressCallback?.Invoke(string.Format("扫描完成({0}个图片行, {1}个编号行) 已用:{2:F2}s",
                     imageRows.Count, seqFieldsByRow.Count, (DateTime.Now - startTime).TotalSeconds));
                 System.Windows.Forms.Application.DoEvents();
+                try { if (app != null) app.ScreenUpdating = false; } catch { }
 
                 // === Step 3: 从第1行开始检查结构，修复增删问题 ===
                 int addedCount = 0, removedCount = 0;
@@ -644,8 +685,11 @@ namespace WordTools.Services
                     // 定期更新进度，防止UI卡顿
                     if (row % progressInterval == 0)
                     {
+                        // 临时启用ScreenUpdating让状态栏可见
+                        try { if (app != null) app.ScreenUpdating = true; } catch { }
                         progressCallback?.Invoke(string.Format("正在检查第 {0}/{1} 行...", row, totalRows));
                         System.Windows.Forms.Application.DoEvents();
+                        try { if (app != null) app.ScreenUpdating = false; } catch { }
                     }
 
                     bool hasImage = imageRows.Contains(row);
@@ -698,8 +742,11 @@ namespace WordTools.Services
                 // 删除行后即使结构没变，值也可能不连续，需要强制更新
                 if (structureChanged || firstBadIdx >= 0)
                 {
+                    // 临时启用ScreenUpdating让状态栏可见
+                    try { if (app != null) app.ScreenUpdating = true; } catch { }
                     progressCallback?.Invoke("正在批量更新编号值...");
                     System.Windows.Forms.Application.DoEvents();
+                    try { if (app != null) app.ScreenUpdating = false; } catch { }
                     try
                     {
                         // 保持 ScreenUpdating = false 进行更新，避免重绘开销
@@ -712,7 +759,13 @@ namespace WordTools.Services
                         {
                             // 大量域：逐行更新，显示进度
                             int batchSize = 50;
-                            for (int i = 1; i <= totalRows; i += batchSize)
+                            int updateStartRow = 1;
+                            if (firstBadIdx >= 0 && sortedRows.Count > firstBadIdx)
+                                updateStartRow = sortedRows[firstBadIdx];
+                            else if (structureChanged)
+                                updateStartRow = scanStart;
+
+                            for (int i = updateStartRow; i <= totalRows; i += batchSize)
                             {
                                 int endRow = Math.Min(i + batchSize - 1, totalRows);
                                 try
@@ -726,9 +779,12 @@ namespace WordTools.Services
                                 
                                 if (i % 100 == 0)
                                 {
-                                    progressCallback?.Invoke(string.Format("正在更新编号... {0}/{1} 行", 
+                                    // 临时启用ScreenUpdating让状态栏可见
+                                    try { if (app != null) app.ScreenUpdating = true; } catch { }
+                                    progressCallback?.Invoke(string.Format("正在更新编号... {0}/{1} 行",
                                         Math.Min(i + batchSize - 1, totalRows), totalRows));
                                     System.Windows.Forms.Application.DoEvents();
+                                    try { if (app != null) app.ScreenUpdating = false; } catch { }
                                 }
                             }
                         }
@@ -766,8 +822,12 @@ namespace WordTools.Services
                     {
                         // 先恢复ScreenUpdating
                         app.ScreenUpdating = wasScreenUpdating;
-                        // 让Word有机会处理重绘，但使用短延迟避免阻塞感
-                        System.Windows.Forms.Application.DoEvents();
+                        // 循环DoEvents让Word有充足时间完成屏幕重绘，避免后续UI冻结
+                        for (int i = 0; i < 15; i++)
+                        {
+                            System.Windows.Forms.Application.DoEvents();
+                            System.Threading.Thread.Sleep(10);
+                        }
                     }
                 }
                 catch { }

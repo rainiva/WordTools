@@ -171,23 +171,22 @@ namespace WordTools
                 try
                 {
                     if (doc.ActiveWindow.View.ShowFieldCodes)
+                    {
                         doc.ActiveWindow.View.ShowFieldCodes = false;
+                        System.Windows.Forms.Application.DoEvents();
+                    }
                 }
                 catch { }
 
                 app.StatusBar = "";
-                // 确保UI完全刷新后再显示提示框
-                // 使用后台线程延迟，避免阻塞UI线程
-                var t = new System.Threading.Thread(() =>
-                {
-                    System.Threading.Thread.Sleep(300);
-                });
-                t.Start();
-                while (t.IsAlive)
+
+                // 让Word完成所有挂起的屏幕重绘和消息处理
+                for (int i = 0; i < 25; i++)
                 {
                     System.Windows.Forms.Application.DoEvents();
                     System.Threading.Thread.Sleep(10);
                 }
+
                 MessageBox.Show("表格编号已刷新完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)

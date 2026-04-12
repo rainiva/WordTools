@@ -323,11 +323,14 @@ namespace WordTools.Services
                 // 1. 先退出高性能模式，让用户立即看到已插入的图片
                 ExitHighPerformanceMode();
 
-                // 强制 Word 重绘屏幕，确保用户看到已插入的图片
+                // 循环DoEvents让Word有充足时间完成屏幕重绘
                 try
                 {
-                    _application.ScreenRefresh();
-                    System.Windows.Forms.Application.DoEvents();
+                    for (int i = 0; i < 10; i++)
+                    {
+                        System.Windows.Forms.Application.DoEvents();
+                        System.Threading.Thread.Sleep(10);
+                    }
                 }
                 catch { }
 
@@ -352,10 +355,25 @@ namespace WordTools.Services
                         }
 
                         _application.ScreenUpdating = true;
+                        // 循环DoEvents让Word有充足时间完成域更新后的屏幕重绘
+                        for (int i = 0; i < 15; i++)
+                        {
+                            System.Windows.Forms.Application.DoEvents();
+                            System.Threading.Thread.Sleep(10);
+                        }
                     }
                     catch
                     {
-                        try { _application.ScreenUpdating = true; } catch { }
+                        try
+                        {
+                            _application.ScreenUpdating = true;
+                            for (int i = 0; i < 15; i++)
+                            {
+                                System.Windows.Forms.Application.DoEvents();
+                                System.Threading.Thread.Sleep(10);
+                            }
+                        }
+                        catch { }
                     }
                 }
 
@@ -365,6 +383,7 @@ namespace WordTools.Services
                     if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
                     {
                         _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
+                        System.Windows.Forms.Application.DoEvents();
                     }
                 }
                 catch { }
@@ -472,11 +491,14 @@ namespace WordTools.Services
                 // 1. 先退出高性能模式，让用户立即看到已插入的图片
                 ExitHighPerformanceMode();
 
-                // 强制 Word 重绘屏幕，确保用户看到已插入的图片
+                // 循环DoEvents让Word有充足时间完成屏幕重绘
                 try
                 {
-                    _application.ScreenRefresh();
-                    System.Windows.Forms.Application.DoEvents();
+                    for (int i = 0; i < 10; i++)
+                    {
+                        System.Windows.Forms.Application.DoEvents();
+                        System.Threading.Thread.Sleep(10);
+                    }
                 }
                 catch { }
 
@@ -501,10 +523,25 @@ namespace WordTools.Services
                         }
 
                         _application.ScreenUpdating = true;
+                        // 循环DoEvents让Word有充足时间完成域更新后的屏幕重绘
+                        for (int i = 0; i < 15; i++)
+                        {
+                            System.Windows.Forms.Application.DoEvents();
+                            System.Threading.Thread.Sleep(10);
+                        }
                     }
                     catch
                     {
-                        try { _application.ScreenUpdating = true; } catch { }
+                        try
+                        {
+                            _application.ScreenUpdating = true;
+                            for (int i = 0; i < 15; i++)
+                            {
+                                System.Windows.Forms.Application.DoEvents();
+                                System.Threading.Thread.Sleep(10);
+                            }
+                        }
+                        catch { }
                     }
                 }
 
@@ -514,6 +551,7 @@ namespace WordTools.Services
                     if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
                     {
                         _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
+                        System.Windows.Forms.Application.DoEvents();
                     }
                 }
                 catch { }
