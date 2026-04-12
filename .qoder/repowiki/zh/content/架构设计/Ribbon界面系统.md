@@ -12,16 +12,16 @@
 - [FileService.cs](file://WordTools/Services/FileService.cs)
 - [ImageService.cs](file://WordTools/Services/ImageService.cs)
 - [TableService.cs](file://WordTools/Services/TableService.cs)
+- [ProgressService.cs](file://WordTools/Services/ProgressService.cs)
 - [README.md](file://README.md)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 新增"刷新编号"按钮功能，支持表格编号的重新生成和验证
-- 增强文档存在性检查和表格选择验证机制
-- 实现状态栏进度报告和UI响应优化
-- 完善TableService的编号刷新功能，支持进度回调和状态更新
-- 新增自动字段代码隐藏功能，确保域代码不可见
+- 优化了延迟机制：使用循环DoEvents + Thread.Sleep替代后台线程，提供更平滑的用户界面体验
+- 改进了UI事件处理：在多个关键节点添加Application.DoEvents()确保界面响应
+- 增强了与TableService进度回调的集成：更好的状态栏更新和用户体验
+- 完善了自动字段代码隐藏机制：确保域代码不可见，提升最终文档质量
 
 ## 目录
 1. [简介](#简介)
@@ -38,7 +38,7 @@
 ## 简介
 本文件面向WordTools的Ribbon界面系统，系统性地解析XML定义的Ribbon界面结构、Ribbon.cs中的界面控制器实现、主题系统与视觉样式定制、按钮点击事件的完整处理链路、状态管理与动态更新机制，以及界面扩展与自定义的最佳实践与用户体验优化建议。文档同时提供可视化图表，帮助读者快速理解组件交互与数据流。
 
-**更新** 新增"刷新编号"功能，支持表格编号的重新生成、文档存在性检查、表格选择验证和状态栏进度报告，以及自动字段代码隐藏功能。
+**更新** 新增用户体验优化功能，包括改进的延迟机制、更好的UI事件处理和与TableService进度回调的深度集成。
 
 ## 项目结构
 WordTools采用COM加载项（IDTExtensibility2）实现，Ribbon界面通过XML定义与回调方法共同构成。核心文件包括：
@@ -47,7 +47,7 @@ WordTools采用COM加载项（IDTExtensibility2）实现，Ribbon界面通过XML
 - ThisAddIn.cs：插件入口，负责生命周期管理与Ribbon状态刷新
 - Theme.cs：统一的UI样式与主题常量，贯穿窗体与控件
 - Forms目录：具体功能窗体（批量插图、Excel数据填充）
-- Services目录：配置、文件、图片、表格等服务模块
+- Services目录：配置、文件、图片、表格、进度等服务模块
 
 ```mermaid
 graph TB
@@ -59,20 +59,24 @@ D["Theme.cs<br/>主题与样式"]
 E["Forms<br/>功能窗体"]
 F["Services<br/>业务服务"]
 G["TableService.cs<br/>表格编号服务"]
+H["ProgressService.cs<br/>进度回调服务"]
 end
 A --> B
 B --> C
 E --> D
 E --> F
 F --> G
+F --> H
+G --> H
 ```
 
 **图表来源**
-- [ThisAddIn.cs:17-236](file://WordTools/ThisAddIn.cs#L17-L236)
-- [Ribbon.cs:14-251](file://WordTools/Ribbon.cs#L14-L251)
+- [ThisAddIn.cs:17-248](file://WordTools/ThisAddIn.cs#L17-L248)
+- [Ribbon.cs:14-262](file://WordTools/Ribbon.cs#L14-L262)
 - [Ribbon.xml:1-62](file://WordTools/Ribbon.xml#L1-L62)
 - [Theme.cs:11-358](file://WordTools/Theme.cs#L11-L358)
-- [TableService.cs:1-1337](file://WordTools/Services/TableService.cs#L1-L1337)
+- [TableService.cs:1-1379](file://WordTools/Services/TableService.cs#L1-L1379)
+- [ProgressService.cs:1-691](file://WordTools/Services/ProgressService.cs#L1-L691)
 
 **章节来源**
 - [README.md:1-85](file://README.md#L1-L85)
@@ -83,21 +87,22 @@ F --> G
 - 插件入口（ThisAddIn.cs）：实现IDTExtensibility2与IRibbonExtensibility，负责应用连接、Ribbon状态刷新。
 - 主题系统（Theme.cs）：集中管理颜色、字体、布局与控件样式，提供DPI缩放与控件工厂方法。
 - 功能窗体（Forms）：批量插图与Excel数据填充窗体，承载复杂交互与业务逻辑。
-- 服务模块（Services）：配置、文件、图片、表格等服务，支撑窗体与Ribbon回调的业务能力。
+- 服务模块（Services）：配置、文件、图片、表格、进度等服务，支撑窗体与Ribbon回调的业务能力。
 
-**更新** 新增TableService.cs，专门处理表格编号和验证功能，支持刷新编号、清除编号和描述行编号。
+**更新** 新增ProgressService.cs，专门处理进度回调和用户体验优化，与TableService形成完整的进度反馈链路。
 
 **章节来源**
 - [Ribbon.xml:1-62](file://WordTools/Ribbon.xml#L1-L62)
-- [Ribbon.cs:14-251](file://WordTools/Ribbon.cs#L14-L251)
-- [ThisAddIn.cs:17-236](file://WordTools/ThisAddIn.cs#L17-L236)
+- [Ribbon.cs:14-262](file://WordTools/Ribbon.cs#L14-L262)
+- [ThisAddIn.cs:17-248](file://WordTools/ThisAddIn.cs#L17-L248)
 - [Theme.cs:11-358](file://WordTools/Theme.cs#L11-L358)
-- [TableService.cs:1-1337](file://WordTools/Services/TableService.cs#L1-L1337)
+- [TableService.cs:1-1379](file://WordTools/Services/TableService.cs#L1-L1379)
+- [ProgressService.cs:1-691](file://WordTools/Services/ProgressService.cs#L1-L691)
 
 ## 架构总览
-Ribbon界面系统遵循"XML定义 + 回调驱动"的模式。Ribbon.cs通过GetCustomUI加载Ribbon.xml，随后根据XML中声明的onAction映射到Ribbon.cs中的回调方法。ThisAddIn.cs负责插件生命周期与Ribbon状态刷新（Invalidate）。窗体层通过Theme.cs统一风格，服务层提供配置、文件、图片与表格处理能力。
+Ribbon界面系统遵循"XML定义 + 回调驱动"的模式。Ribbon.cs通过GetCustomUI加载Ribbon.xml，随后根据XML中声明的onAction映射到Ribbon.cs中的回调方法。ThisAddIn.cs负责插件生命周期与Ribbon状态刷新（Invalidate）。窗体层通过Theme.cs统一风格，服务层提供配置、文件、图片与表格处理能力。**更新** 新增ProgressService作为进度回调中介，优化用户体验。
 
-**更新** 新增TableService的编号刷新功能，支持进度回调和状态栏更新，并集成自动字段代码隐藏机制。
+**更新** 新增ProgressService的进度回调机制，与TableService形成完整的用户体验优化链路。
 
 ```mermaid
 sequenceDiagram
@@ -106,6 +111,7 @@ participant AddIn as "ThisAddIn.cs"
 participant Ribbon as "Ribbon.cs"
 participant XML as "Ribbon.xml"
 participant TableService as "TableService.cs"
+participant ProgressService as "ProgressService.cs"
 participant Form as "功能窗体"
 Word->>AddIn : "OnConnection(...)"
 AddIn->>AddIn : "保存全局引用"
@@ -122,7 +128,9 @@ TableService-->>Ribbon : "验证结果"
 Ribbon->>TableService : "RefreshTableNumbering"
 TableService->>TableService : "ClearTableNumbering"
 TableService->>TableService : "AddNumberingToDescriptionRows"
-TableService-->>Ribbon : "进度回调"
+TableService->>ProgressService : "进度回调"
+ProgressService-->>Ribbon : "状态栏更新"
+Ribbon->>Ribbon : "Application.DoEvents() + Thread.Sleep"
 Ribbon-->>Word : "显示结果"
 ```
 
@@ -131,6 +139,7 @@ Ribbon-->>Word : "显示结果"
 - [Ribbon.cs:24-36](file://WordTools/Ribbon.cs#L24-L36)
 - [Ribbon.xml:20-27](file://WordTools/Ribbon.xml#L20-L27)
 - [TableService.cs:457-470](file://WordTools/Services/TableService.cs#L457-L470)
+- [ProgressService.cs:320-350](file://WordTools/Services/ProgressService.cs#L320-L350)
 
 ## 详细组件分析
 
@@ -176,7 +185,7 @@ Callbacks --> End(["界面可用"])
   - 动态标签与提示：GetLabel、GetDescription、GetSupertip、GetScreentip用于本地化与提示信息。
 - 错误处理：所有回调均包含try/catch，异常通过消息框提示。
 
-**更新** 新增OnRefreshNumberingClick方法，实现完整的表格编号刷新功能。
+**更新** 新增OnRefreshNumberingClick方法，实现完整的表格编号刷新功能，包含改进的延迟机制和UI事件处理。
 
 ```mermaid
 classDiagram
@@ -197,10 +206,10 @@ class Ribbon {
 ```
 
 **图表来源**
-- [Ribbon.cs:14-251](file://WordTools/Ribbon.cs#L14-L251)
+- [Ribbon.cs:14-262](file://WordTools/Ribbon.cs#L14-L262)
 
 **章节来源**
-- [Ribbon.cs:24-251](file://WordTools/Ribbon.cs#L24-L251)
+- [Ribbon.cs:24-262](file://WordTools/Ribbon.cs#L24-L262)
 
 ### 插件入口（ThisAddIn.cs）
 - 生命周期：实现IDTExtensibility2，记录应用实例与全局引用。
@@ -235,15 +244,16 @@ TableService-->>AddIn : "进度回调"
 AddIn->>AddIn : "Application.StatusBar = status"
 AddIn->>AddIn : "Application.DoEvents()"
 AddIn->>AddIn : "确保域代码不可见"
+AddIn->>AddIn : "循环DoEvents + Thread.Sleep"
 AddIn-->>Word : "显示结果"
 ```
 
 **图表来源**
-- [ThisAddIn.cs:17-236](file://WordTools/ThisAddIn.cs#L17-L236)
+- [ThisAddIn.cs:17-248](file://WordTools/ThisAddIn.cs#L17-L248)
 - [TableService.cs:457-470](file://WordTools/Services/TableService.cs#L457-L470)
 
 **章节来源**
-- [ThisAddIn.cs:86-236](file://WordTools/ThisAddIn.cs#L86-L236)
+- [ThisAddIn.cs:86-248](file://WordTools/ThisAddIn.cs#L86-L248)
 
 ### 主题系统（Theme.cs）
 - 颜色方案：背景、主色、成功/危险、文本、边框、按钮与输入框状态色。
@@ -326,6 +336,8 @@ Theme --> Layout
 - 配置持久化：通过ConfigService读取/保存最近设置。
 - 业务流程：校验输入、隐藏窗体、调用ProgressService执行插入与编号，实时更新状态。
 
+**更新** 新增改进的延迟机制，在执行前调用Hide与Application.DoEvents，确保界面响应。
+
 ```mermaid
 sequenceDiagram
 participant User as "用户"
@@ -383,33 +395,38 @@ EnableBtns --> End(["完成"])
 - 配置持久化：ConfigService结合文档自定义属性与注册表，实现跨文档与全局配置。
 - **新增** 进度报告：TableService支持进度回调，通过状态栏实时显示处理进度。
 - **新增** 自动字段代码隐藏：刷新完成后自动确保域代码不可见，提升用户体验。
+- **新增** 改进的延迟机制：使用循环DoEvents + Thread.Sleep替代后台线程，提供更平滑的用户界面体验。
 
-**更新** 新增TableService的进度回调机制和自动字段代码隐藏功能。
+**更新** 新增ProgressService的进度回调机制和改进的延迟处理，以及自动字段代码隐藏功能。
 
 ```mermaid
 sequenceDiagram
 participant AddIn as "ThisAddIn"
 participant Ribbon as "Ribbon"
 participant TableService as "TableService"
+participant ProgressService as "ProgressService"
 participant UI as "Word界面"
 AddIn->>AddIn : "InvalidateRibbon()"
 AddIn->>Ribbon : "ribbonUI.Invalidate()"
 Ribbon->>UI : "触发界面重绘"
 UI-->>UI : "重新加载标签/提示/状态"
-TableService->>AddIn : "progressCallback(status)"
-AddIn->>AddIn : "Application.StatusBar = status"
-AddIn->>AddIn : "Application.DoEvents()"
-AddIn->>AddIn : "确保域代码不可见"
+TableService->>ProgressService : "progressCallback(status)"
+ProgressService->>Ribbon : "Application.StatusBar = status"
+ProgressService->>Ribbon : "Application.DoEvents()"
+ProgressService->>Ribbon : "循环DoEvents + Thread.Sleep"
+Ribbon->>Ribbon : "确保域代码不可见"
 ```
 
 **图表来源**
 - [ThisAddIn.cs:95-101](file://WordTools/ThisAddIn.cs#L95-L101)
 - [TableService.cs:457-470](file://WordTools/Services/TableService.cs#L457-L470)
+- [ProgressService.cs:320-350](file://WordTools/Services/ProgressService.cs#L320-L350)
 
 **章节来源**
 - [ThisAddIn.cs:95-101](file://WordTools/ThisAddIn.cs#L95-L101)
 - [ConfigService.cs:149-207](file://WordTools/Services/ConfigService.cs#L149-L207)
 - [TableService.cs:457-470](file://WordTools/Services/TableService.cs#L457-L470)
+- [ProgressService.cs:320-350](file://WordTools/Services/ProgressService.cs#L320-L350)
 
 ### 按钮点击事件处理流程（从UI到功能执行）
 - 用户点击：Word触发Ribbon回调（OnInsertPhotosClick/OnExcelDataFillerClick/OnAboutClick/OnRefreshNumberingClick）。
@@ -417,13 +434,14 @@ AddIn->>AddIn : "确保域代码不可见"
 - 窗体交互：窗体通过Theme统一样式，调用Services执行业务逻辑。
 - 结果反馈：通过消息框或状态区反馈结果。
 
-**更新** 新增OnRefreshNumberingClick的完整处理流程，包含文档检查、表格验证、进度报告和自动字段代码隐藏。
+**更新** 新增OnRefreshNumberingClick的完整处理流程，包含文档检查、表格验证、进度报告、自动字段代码隐藏和改进的延迟机制。
 
 ```mermaid
 sequenceDiagram
 participant User as "用户"
 participant Ribbon as "Ribbon/ThisAddIn"
 participant TableService as "TableService"
+participant ProgressService as "ProgressService"
 participant Word as "Word 应用"
 User->>Ribbon : "点击刷新编号按钮"
 Ribbon->>Ribbon : "OnRefreshNumberingClick()"
@@ -437,22 +455,24 @@ TableService-->>Ribbon : "Table对象"
 Ribbon->>TableService : "RefreshTableNumbering(progressCallback)"
 TableService->>TableService : "ClearTableNumbering()"
 TableService->>TableService : "AddNumberingToDescriptionRows()"
-TableService-->>Ribbon : "进度回调"
-Ribbon->>Ribbon : "Application.StatusBar = status"
+TableService->>ProgressService : "progressCallback(status)"
+ProgressService-->>Ribbon : "Application.StatusBar = status"
 Ribbon->>Ribbon : "Application.DoEvents()"
 Ribbon->>Ribbon : "确保域代码不可见"
+Ribbon->>Ribbon : "循环DoEvents + Thread.Sleep"
 Ribbon-->>User : "显示完成消息"
 end
 ```
 
 **图表来源**
-- [Ribbon.cs:127-185](file://WordTools/Ribbon.cs#L127-L185)
-- [ThisAddIn.cs:131-186](file://WordTools/ThisAddIn.cs#L131-L186)
+- [Ribbon.cs:127-196](file://WordTools/Ribbon.cs#L127-L196)
+- [ThisAddIn.cs:131-198](file://WordTools/ThisAddIn.cs#L131-L198)
 - [TableService.cs:457-470](file://WordTools/Services/TableService.cs#L457-L470)
+- [ProgressService.cs:320-350](file://WordTools/Services/ProgressService.cs#L320-L350)
 
 **章节来源**
-- [Ribbon.cs:38-185](file://WordTools/Ribbon.cs#L38-L185)
-- [ThisAddIn.cs:108-186](file://WordTools/ThisAddIn.cs#L108-L186)
+- [Ribbon.cs:38-196](file://WordTools/Ribbon.cs#L38-L196)
+- [ThisAddIn.cs:108-198](file://WordTools/ThisAddIn.cs#L108-L198)
 
 ### 表格编号服务（TableService.cs）
 - **新增** 表格验证：IsSelectionInTable、IsSelectionInFirstColumn、GetCurrentTable等验证方法。
@@ -491,10 +511,52 @@ TableService --> NumberingMethods
 ```
 
 **图表来源**
-- [TableService.cs:12-1337](file://WordTools/Services/TableService.cs#L12-L1337)
+- [TableService.cs:12-1379](file://WordTools/Services/TableService.cs#L12-L1379)
 
 **章节来源**
-- [TableService.cs:12-1337](file://WordTools/Services/TableService.cs#L12-L1337)
+- [TableService.cs:12-1379](file://WordTools/Services/TableService.cs#L12-L1379)
+
+### 进度回调服务（ProgressService.cs）
+- **新增** 进度回调机制：支持Action<string>类型的进度回调，实现实时状态更新。
+- **新增** 用户体验优化：使用循环DoEvents + Thread.Sleep替代后台线程，提供更平滑的界面体验。
+- **新增** 屏幕更新控制：通过EnterHighPerformanceMode/ExitHighPerformanceMode优化视觉效果。
+- **新增** 自动字段代码隐藏：确保域代码不可见，提升最终文档质量。
+- **新增** ESC键取消支持：检测ESC键按下，提供用户取消操作的能力。
+
+**更新** 完整实现进度回调服务，支持用户体验优化和自动字段代码隐藏。
+
+```mermaid
+classDiagram
+class ProgressService {
+<<static>>
++ InsertPhotosWithProgress(folderPath, minHeight, needDescription, useFileNameAsDescription, includeRootImages, includeSubFolderImages, needAutoNumbering, numberAlignment) void
++ InsertSelectedPhotosWithProgress(files, minHeight, needDescription, useFileNameAsDescription, needAutoNumbering, numberAlignment) void
++ EnterHighPerformanceMode() void
++ ExitHighPerformanceMode() void
++ CheckEscapeKey() bool
++ ShouldCancel() bool
+}
+class PerformanceMethods {
++ EnterHighPerformanceMode() void
++ ExitHighPerformanceMode() void
+}
+class CancelMethods {
++ CheckEscapeKey() bool
++ ShouldCancel() bool
+}
+class FieldCodeMethods {
++ HideFieldCodes() void
+}
+ProgressService --> PerformanceMethods
+ProgressService --> CancelMethods
+ProgressService --> FieldCodeMethods
+```
+
+**图表来源**
+- [ProgressService.cs:1-691](file://WordTools/Services/ProgressService.cs#L1-L691)
+
+**章节来源**
+- [ProgressService.cs:1-691](file://WordTools/Services/ProgressService.cs#L1-L691)
 
 ## 依赖关系分析
 - Ribbon.cs依赖Ribbon.xml（通过资源加载）与窗体（打开窗体）。
@@ -502,8 +564,9 @@ TableService --> NumberingMethods
 - 窗体依赖Theme.cs与Services（ConfigService、FileService、ImageService）。
 - Services之间低耦合，通过公共接口协作。
 - **新增** TableService依赖Microsoft.Office.Interop.Word进行表格操作。
+- **新增** ProgressService提供统一的进度回调和用户体验优化机制。
 
-**更新** 新增TableService对Word Interop的依赖，支持表格编号功能。
+**更新** 新增ProgressService对用户体验优化的支持，与TableService形成完整的进度反馈链路。
 
 ```mermaid
 graph LR
@@ -516,26 +579,30 @@ Services --> ConfigService_cs["ConfigService.cs"]
 Services --> FileService_cs["FileService.cs"]
 Services --> ImageService_cs["ImageService.cs"]
 Services --> TableService_cs["TableService.cs"]
+Services --> ProgressService_cs["ProgressService.cs"]
 TableService_cs --> WordInterop["Microsoft.Office.Interop.Word"]
+ProgressService_cs --> WordInterop
 ```
 
 **图表来源**
-- [Ribbon.cs:24-185](file://WordTools/Ribbon.cs#L24-L185)
-- [ThisAddIn.cs:131-186](file://WordTools/ThisAddIn.cs#L131-L186)
+- [Ribbon.cs:24-196](file://WordTools/Ribbon.cs#L24-L196)
+- [ThisAddIn.cs:131-198](file://WordTools/ThisAddIn.cs#L131-L198)
 - [Theme.cs:11-358](file://WordTools/Theme.cs#L11-L358)
 - [ConfigService.cs:11-463](file://WordTools/Services/ConfigService.cs#L11-L463)
 - [FileService.cs:13-310](file://WordTools/Services/FileService.cs#L13-L310)
 - [ImageService.cs:10-325](file://WordTools/Services/ImageService.cs#L10-L325)
-- [TableService.cs:1-1337](file://WordTools/Services/TableService.cs#L1-L1337)
+- [TableService.cs:1-1379](file://WordTools/Services/TableService.cs#L1-L1379)
+- [ProgressService.cs:1-691](file://WordTools/Services/ProgressService.cs#L1-L691)
 
 **章节来源**
-- [Ribbon.cs:24-185](file://WordTools/Ribbon.cs#L24-L185)
-- [ThisAddIn.cs:131-186](file://WordTools/ThisAddIn.cs#L131-L186)
+- [Ribbon.cs:24-196](file://WordTools/Ribbon.cs#L24-L196)
+- [ThisAddIn.cs:131-198](file://WordTools/ThisAddIn.cs#L131-L198)
 - [Theme.cs:11-358](file://WordTools/Theme.cs#L11-L358)
 - [ConfigService.cs:11-463](file://WordTools/Services/ConfigService.cs#L11-L463)
 - [FileService.cs:13-310](file://WordTools/Services/FileService.cs#L13-L310)
 - [ImageService.cs:10-325](file://WordTools/Services/ImageService.cs#L10-L325)
-- [TableService.cs:1-1337](file://WordTools/Services/TableService.cs#L1-L1337)
+- [TableService.cs:1-1379](file://WordTools/Services/TableService.cs#L1-L1379)
+- [ProgressService.cs:1-691](file://WordTools/Services/ProgressService.cs#L1-L691)
 
 ## 性能考量
 - UI响应性：窗体在执行前调用Hide与Application.DoEvents，避免界面冻结。
@@ -545,15 +612,18 @@ TableService_cs --> WordInterop["Microsoft.Office.Interop.Word"]
 - **新增** 进度回调：TableService使用Action<string>回调，避免长时间阻塞UI线程。
 - **新增** 屏幕更新控制：通过Application.ScreenUpdating=false减少界面闪烁。
 - **新增** COM调用优化：TableService采用一次性获取整表文本的方式，减少COM调用次数。
+- **新增** 改进的延迟机制：使用循环DoEvents + Thread.Sleep替代后台线程，提供更平滑的用户界面体验。
+- **新增** 用户体验优化：ProgressService在关键节点添加Application.DoEvents()确保界面响应。
 
-**更新** 新增TableService的性能优化措施，包括进度回调、屏幕更新控制和COM调用优化。
+**更新** 新增ProgressService的用户体验优化措施，包括改进的延迟机制、更好的UI事件处理和自动字段代码隐藏。
 
 **章节来源**
 - [InsertPhotosForm.cs:510-518](file://WordTools/Forms/InsertPhotosForm.cs#L510-L518)
 - [ImageService.cs:247-320](file://WordTools/Services/ImageService.cs#L247-L320)
 - [Theme.cs:135-171](file://WordTools/Theme.cs#L135-L171)
 - [TableService.cs:457-470](file://WordTools/Services/TableService.cs#L457-L470)
-- [ThisAddIn.cs:157-186](file://WordTools/ThisAddIn.cs#L157-L186)
+- [ThisAddIn.cs:157-198](file://WordTools/ThisAddIn.cs#L157-L198)
+- [ProgressService.cs:320-350](file://WordTools/Services/ProgressService.cs#L320-L350)
 
 ## 故障排查指南
 - 插件未加载：确认注册与权限，参考README中的注册与卸载步骤。
@@ -564,8 +634,9 @@ TableService_cs --> WordInterop["Microsoft.Office.Interop.Word"]
 - **新增** 刷新编号失败：检查文档是否存在、光标是否在表格中、表格是否包含图片。
 - **新增** 进度显示异常：确认Application.StatusBar权限和DoEvents调用时机。
 - **新增** 域代码可见：检查自动字段代码隐藏功能是否正常工作。
+- **新增** 延迟机制问题：检查循环DoEvents + Thread.Sleep的调用时机和频率。
 
-**更新** 新增刷新编号功能的故障排查指导，包括进度显示和域代码隐藏问题。
+**更新** 新增刷新编号功能的故障排查指导，包括进度显示、域代码隐藏和延迟机制问题。
 
 **章节来源**
 - [README.md:30-75](file://README.md#L30-L75)
@@ -573,7 +644,7 @@ TableService_cs --> WordInterop["Microsoft.Office.Interop.Word"]
 - [ExcelDataFillerForm.cs:348-354](file://WordTools/Forms/ExcelDataFillerForm.cs#L348-L354)
 
 ## 结论
-WordTools的Ribbon界面系统通过XML定义与回调机制清晰分离了界面与逻辑，配合统一的主题系统与服务模块，实现了良好的可维护性与可扩展性。通过状态刷新、DPI适配与长耗时任务的UI响应策略，提升了用户体验。**新增的表格编号刷新功能**进一步增强了系统的实用性，支持文档存在性检查、表格选择验证、状态栏进度报告和自动字段代码隐藏。建议在扩展新功能时遵循现有模式，保持回调命名一致性与主题样式统一。
+WordTools的Ribbon界面系统通过XML定义与回调机制清晰分离了界面与逻辑，配合统一的主题系统与服务模块，实现了良好的可维护性与可扩展性。通过状态刷新、DPI适配与长耗时任务的UI响应策略，提升了用户体验。**新增的表格编号刷新功能**进一步增强了系统的实用性，支持文档存在性检查、表格选择验证、状态栏进度报告和自动字段代码隐藏。**更新的用户体验优化**包括改进的延迟机制、更好的UI事件处理和与TableService进度回调的深度集成，提供了更平滑的用户界面体验。建议在扩展新功能时遵循现有模式，保持回调命名一致性与主题样式统一。
 
 ## 附录
 
@@ -585,6 +656,7 @@ WordTools的Ribbon界面系统通过XML定义与回调机制清晰分离了界�
 - 业务服务：将复杂逻辑封装在Services中，避免窗体与控制器过重。
 - **新增** 进度报告：对于长耗时操作，使用Action<string>回调提供实时进度反馈。
 - **新增** 状态栏集成：使用Application.StatusBar提供用户友好的进度提示。
+- **新增** 用户体验优化：在关键节点添加Application.DoEvents()确保界面响应。
 
 ### 用户体验优化最佳实践
 - 提示信息：合理使用screentip/supertip，帮助用户理解功能。
@@ -594,6 +666,7 @@ WordTools的Ribbon界面系统通过XML定义与回调机制清晰分离了界�
 - **新增** 状态栏集成：对于表格操作，使用Application.StatusBar提供实时进度。
 - **新增** 屏幕更新控制：通过Application.ScreenUpdating=true/false优化视觉效果。
 - **新增** 自动字段代码隐藏：确保域代码不可见，提升最终文档质量。
+- **新增** 改进的延迟机制：使用循环DoEvents + Thread.Sleep替代后台线程，提供更平滑的用户界面体验。
 
 ### 刷新编号功能使用指南
 - **使用场景**：当手动增删图片后，需要重新生成表格编号时使用。
@@ -607,3 +680,11 @@ WordTools的Ribbon界面系统通过XML定义与回调机制清晰分离了界�
   - 避免在表格编辑过程中频繁点击
   - 大表格可能需要较长时间处理
   - 刷新完成后域代码会自动隐藏
+  - 使用改进的延迟机制确保界面响应流畅
+
+### 用户体验优化技术详解
+- **改进的延迟机制**：使用循环DoEvents + Thread.Sleep替代传统的后台线程，提供更平滑的用户界面体验
+- **更好的UI事件处理**：在多个关键节点添加Application.DoEvents()，确保界面能够及时响应用户操作
+- **与TableService进度回调的集成**：通过ProgressService实现更精确的状态栏更新和用户体验优化
+- **自动字段代码隐藏**：确保域代码不可见，提升最终文档质量
+- **循环优化**：在关键操作中使用固定次数的循环（通常10-25次），平衡响应性和性能

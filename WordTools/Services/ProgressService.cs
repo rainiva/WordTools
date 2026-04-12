@@ -168,6 +168,7 @@ namespace WordTools.Services
             bool includeRootImages, bool includeSubFolderImages,
             bool needAutoNumbering, int numberAlignment = 2)
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             _isCancelled = false;
             int processedCount = 0;
             int successCount = 0;
@@ -246,6 +247,7 @@ namespace WordTools.Services
                 {
                     startNumber = TableService.CalculateNextSequenceNumber(tbl, startRow);
                 }
+                int currentNumber = startNumber;
 
                 // 预分配行数
                 ImageService.PreAllocateRows(tbl, totalFiles, 2, needDescription, _application);
@@ -265,7 +267,7 @@ namespace WordTools.Services
                     // 处理文件
                     ProcessFileBatch(imageFiles.RootFiles, tbl, ref rowIndex, minHeight, needDescription,
                         useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                        totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, startNumber);
+                        totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, ref currentNumber);
                 }
 
                 // 处理子文件夹
@@ -285,7 +287,7 @@ namespace WordTools.Services
 
                             ProcessFileBatch(subFiles, tbl, ref rowIndex, minHeight, needDescription,
                                 useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                                totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, startNumber);
+                                totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, ref currentNumber);
 
                             // 释放引用，帮助垃圾回收
                             imageFiles.SubfolderFiles[subfolder] = null;
@@ -297,19 +299,25 @@ namespace WordTools.Services
                 _application.StatusBar = string.Format("完成！成功: {0} 失败: {1}", successCount, failCount);
 
                 // 显示完成消息
+                stopwatch.Stop();
+                double seconds = stopwatch.Elapsed.TotalSeconds;
+                string timeInfo = seconds >= 60
+                    ? $"{(int)(seconds / 60)}分{seconds % 60:F1}秒"
+                    : $"{seconds:F1}秒";
+
                 if (_isCancelled)
                 {
-                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。", successCount), "提示",
+                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo), "提示",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 else if (failCount > 0)
                 {
-                    MessageBox.Show(string.Format("图片插入完成！\n成功: {0} 张\n失败: {1} 张", successCount, failCount), "完成",
+                    MessageBox.Show(string.Format("图片插入完成！\n成功: {0} 张\n失败: {1} 张\n耗时: {2}", successCount, failCount, timeInfo), "完成",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    MessageBox.Show(string.Format("成功插入 {0} 张图片！", successCount), "完成",
+                    MessageBox.Show(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo), "完成",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -333,49 +341,6 @@ namespace WordTools.Services
                     }
                 }
                 catch { }
-
-                // 2. 更新编号域的显示值（SEQ 域已在插图循环中内联插入）
-                if (needAutoNumbering && startRow > 0 && tbl != null)
-                {
-                    try
-                    {
-                        _application.StatusBar = "正在更新编号...";
-                        System.Windows.Forms.Application.DoEvents();
-                        _application.ScreenUpdating = false;
-
-                        if (startRow > 1)
-                        {
-                            Range updateRange = tbl.Cell(startRow, 1).Range;
-                            updateRange.SetRange(updateRange.Start, tbl.Range.End);
-                            updateRange.Fields.Update();
-                        }
-                        else
-                        {
-                            tbl.Range.Fields.Update();
-                        }
-
-                        _application.ScreenUpdating = true;
-                        // 循环DoEvents让Word有充足时间完成域更新后的屏幕重绘
-                        for (int i = 0; i < 15; i++)
-                        {
-                            System.Windows.Forms.Application.DoEvents();
-                            System.Threading.Thread.Sleep(10);
-                        }
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            _application.ScreenUpdating = true;
-                            for (int i = 0; i < 15; i++)
-                            {
-                                System.Windows.Forms.Application.DoEvents();
-                                System.Threading.Thread.Sleep(10);
-                            }
-                        }
-                        catch { }
-                    }
-                }
 
                 // 3. 确保域代码不可见（保持原有逻辑不变）
                 try
@@ -402,6 +367,7 @@ namespace WordTools.Services
         public void InsertSelectedPhotosWithProgress(string[] files, float minHeight,
             bool needDescription, bool useFileNameAsDescription, bool needAutoNumbering, int numberAlignment = 2)
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             _isCancelled = false;
             int processedCount = 0;
             int successCount = 0;
@@ -458,6 +424,7 @@ namespace WordTools.Services
                 {
                     startNumber = TableService.CalculateNextSequenceNumber(tbl, startRow);
                 }
+                int currentNumber = startNumber;
 
                 _application.StatusBar = string.Format("准备插入 {0} 张图片...", totalFiles);
                 System.Windows.Forms.Application.DoEvents();
@@ -465,19 +432,25 @@ namespace WordTools.Services
                 // 处理文件
                 ProcessFileBatch(files, tbl, ref rowIndex, minHeight, needDescription,
                     useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                    totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, startNumber);
+                    totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, ref currentNumber);
 
                 // 完成
                 _application.StatusBar = string.Format("完成！成功: {0} 失败: {1}", successCount, failCount);
 
+                stopwatch.Stop();
+                double seconds = stopwatch.Elapsed.TotalSeconds;
+                string timeInfo = seconds >= 60
+                    ? $"{(int)(seconds / 60)}分{seconds % 60:F1}秒"
+                    : $"{seconds:F1}秒";
+
                 if (_isCancelled)
                 {
-                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。", successCount), "提示",
+                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo), "提示",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 else
                 {
-                    MessageBox.Show(string.Format("成功插入 {0} 张图片！", successCount), "完成",
+                    MessageBox.Show(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo), "完成",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -501,49 +474,6 @@ namespace WordTools.Services
                     }
                 }
                 catch { }
-
-                // 2. 更新编号域的显示值（SEQ 域已在插图循环中内联插入）
-                if (needAutoNumbering && startRow > 0 && tbl != null)
-                {
-                    try
-                    {
-                        _application.StatusBar = "正在更新编号...";
-                        System.Windows.Forms.Application.DoEvents();
-                        _application.ScreenUpdating = false;
-
-                        if (startRow > 1)
-                        {
-                            Range updateRange = tbl.Cell(startRow, 1).Range;
-                            updateRange.SetRange(updateRange.Start, tbl.Range.End);
-                            updateRange.Fields.Update();
-                        }
-                        else
-                        {
-                            tbl.Range.Fields.Update();
-                        }
-
-                        _application.ScreenUpdating = true;
-                        // 循环DoEvents让Word有充足时间完成域更新后的屏幕重绘
-                        for (int i = 0; i < 15; i++)
-                        {
-                            System.Windows.Forms.Application.DoEvents();
-                            System.Threading.Thread.Sleep(10);
-                        }
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            _application.ScreenUpdating = true;
-                            for (int i = 0; i < 15; i++)
-                            {
-                                System.Windows.Forms.Application.DoEvents();
-                                System.Threading.Thread.Sleep(10);
-                            }
-                        }
-                        catch { }
-                    }
-                }
 
                 // 3. 确保域代码不可见（保持原有逻辑不变）
                 try
@@ -572,9 +502,15 @@ namespace WordTools.Services
             ref int processedCount, ref int successCount, ref int failCount,
             int totalFiles, DateTime startTime,
             bool needAutoNumbering, WdParagraphAlignment numberAlignment,
-            ref bool isFirstSeqField, int startNumber)
+            ref bool isFirstSeqField, ref int currentNumber)
         {
             var currentRowFiles = new List<string>();
+
+            // 性能优化：缓存行数，避免重复 COM 调用
+            int cachedRowCount = tbl.Rows.Count;
+
+            // 性能优化：循环前预先调整列数
+            TableService.AdjustTableColumns(tbl, 2);
 
             for (int i = 0; i < files.Length; i++)
             {
@@ -595,12 +531,13 @@ namespace WordTools.Services
                     // 计算列位置
                     int expectedCol = (i % 2) + 1;
 
-                    // 确保行存在
-                    if (rowIndex > tbl.Rows.Count)
+                    // 确保行存在（使用缓存行数优化）
+                    if (rowIndex > cachedRowCount)
                     {
-                        int rowCountBefore = tbl.Rows.Count;
+                        int rowCountBefore = cachedRowCount;
                         tbl.Rows.Add();
-                        if (tbl.Rows.Count <= rowCountBefore)
+                        cachedRowCount = tbl.Rows.Count;
+                        if (cachedRowCount <= rowCountBefore)
                         {
                             throw new InvalidOperationException("Failed to add new row to table.");
                         }
@@ -641,15 +578,18 @@ namespace WordTools.Services
                         if (useFileNameAsDescription)
                         {
                             rowIndex++;
-                            TableService.EnsureRowExists(tbl, rowIndex);
+                            TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
+                            // 保存当前行号，因为 InsertFileNameDescriptionRow 会递增 rowIndex
+                            int descriptionRow = rowIndex;
                             TableService.InsertFileNameDescriptionRow(tbl, ref rowIndex, currentRowFiles.ToArray());
-                            // 内联编号：在 ScreenUpdating=false 下直接插入 SEQ 域
+                            // 内联编号：直接插入纯文本编号，每列独立递增
                             if (needAutoNumbering)
                             {
                                 for (int col = 1; col <= 2; col++)
                                 {
-                                    try { TableService.InsertSeqField(tbl, rowIndex, col, numberAlignment, ref isFirstSeqField, startNumber); }
+                                    try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true); }
                                     catch { }
+                                    currentNumber++; // 每列递增
                                 }
                             }
                             currentRowFiles.Clear();
@@ -657,24 +597,25 @@ namespace WordTools.Services
                         else if (needDescription)
                         {
                             rowIndex++;
-                            TableService.EnsureRowExists(tbl, rowIndex);
+                            TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
                             TableService.InsertDescriptionRow(tbl, ref rowIndex);
-                            // 内联编号
+                            // 内联编号，每列独立递增
                             if (needAutoNumbering)
                             {
                                 for (int col = 1; col <= 2; col++)
                                 {
-                                    try { TableService.InsertSeqField(tbl, rowIndex, col, numberAlignment, ref isFirstSeqField, startNumber); }
+                                    try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true); }
                                     catch { }
+                                    currentNumber++; // 每列递增
                                 }
                             }
                             rowIndex++;
-                            TableService.EnsureRowExists(tbl, rowIndex);
+                            TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
                         }
                         else
                         {
                             rowIndex++;
-                            TableService.EnsureRowExists(tbl, rowIndex);
+                            TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
                         }
                     }
                 }
@@ -702,34 +643,41 @@ namespace WordTools.Services
             if (useFileNameAsDescription && currentRowFiles.Count > 0)
             {
                 rowIndex++;
-                TableService.EnsureRowExists(tbl, rowIndex);
+                TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
+                // 保存当前行号，因为 InsertFileNameDescriptionRow 会递增 rowIndex
+                int descriptionRow = rowIndex;
                 TableService.InsertFileNameDescriptionRow(tbl, ref rowIndex, currentRowFiles.ToArray());
-                // 内联编号
+                // 内联编号，每列独立递增
                 if (needAutoNumbering)
                 {
                     for (int col = 1; col <= 2; col++)
                     {
-                        try { TableService.InsertSeqField(tbl, rowIndex, col, numberAlignment, ref isFirstSeqField, startNumber); }
+                        try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true); }
                         catch { }
+                        currentNumber++; // 每列递增
                     }
                 }
             }
             else if (needDescription)
             {
                 rowIndex++;
-                TableService.EnsureRowExists(tbl, rowIndex);
+                TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
                 TableService.InsertDescriptionRow(tbl, ref rowIndex);
-                // 内联编号
+                // 内联编号，每列独立递增
                 if (needAutoNumbering)
                 {
                     for (int col = 1; col <= 2; col++)
                     {
-                        try { TableService.InsertSeqField(tbl, rowIndex, col, numberAlignment, ref isFirstSeqField, startNumber); }
+                        try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true); }
                         catch { }
+                        currentNumber++; // 每列递增
                     }
                 }
                 rowIndex++;
             }
+
+            // 循环结束后统一调整列数（性能优化：避免每次 EnsureRowExists 都调用）
+            TableService.AdjustTableColumns(tbl, 2);
         }
 
         #endregion
