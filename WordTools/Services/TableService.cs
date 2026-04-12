@@ -695,7 +695,36 @@ namespace WordTools.Services
                 int progressInterval = totalRows < 50 ? 5 : (totalRows < 200 ? 10 : 20);
 
                 // 单遍扫描 + 编号
+                // 初始化：检查 startRow-1 行是否有图片（确保 startRow 处的描述行能被正确识别）
                 bool prevRowHasImages = false;
+                if (startRow > 1)
+                {
+                    try
+                    {
+                        int prevRow = startRow - 1;
+                        // 检查前一行是否为合并行
+                        bool prevIsMerged = false;
+                        try { prevIsMerged = tbl.Rows[prevRow].Cells.Count < colCount; }
+                        catch { prevIsMerged = true; }
+
+                        if (!prevIsMerged)
+                        {
+                            for (int c = 1; c <= colCount; c++)
+                            {
+                                try
+                                {
+                                    if (tbl.Cell(prevRow, c).Range.InlineShapes.Count > 0)
+                                    {
+                                        prevRowHasImages = true;
+                                        break;
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { }
+                }
 
                 for (int rowIdx = startRow; rowIdx <= totalRows; rowIdx++)
                 {
@@ -879,29 +908,24 @@ namespace WordTools.Services
         {
             try
             {
-                // 1. 获取单元格 Range 和起止位置（只获取一次 Cell，后续复用位置信息）
-                Range cellRange = tbl.Cell(rowIdx, colIdx).Range;
-                int cellStart = cellRange.Start;
-                int cellEnd = cellRange.End - 1; // 排除 end-of-cell marker
-        
-                // 2. 读取现有文本（复用 cellRange）
-                cellRange.SetRange(cellStart, cellEnd);
-                string existingText = CleanCellText(cellRange.Text);
-        
-                // 3. 清理原内容：去掉编号前缀和残留的点号，只保留文件名
+                // 1. 获取并读取现有文本
+                Range readRange = tbl.Cell(rowIdx, colIdx).Range;
+                readRange.SetRange(readRange.Start, readRange.End - 1);
+                string existingText = CleanCellText(readRange.Text);
+
+                // 2. 清理编号前缀，只保留文件名
                 if (!string.IsNullOrEmpty(existingText))
                 {
-                    // 先去掉编号前缀（如 "1. ", "2) "）
-                    existingText = Regex.Replace(existingText, @"^\d+[.)\]\s*", "");
-                    // 再去掉残留的点号和空格（如刷新编号后留下的 ". " 或 "."）
+                    existingText = Regex.Replace(existingText, @"^\d+[.)]+\s*", "");
                     existingText = existingText.TrimStart('.', ' ');
                 }
-        
-                // 4. 清空单元格内容（复用 cellRange）
-                cellRange.SetRange(cellStart, cellEnd);
-                cellRange.Text = "";
-        
-                // 5. 构建 SEQ 域参数
+
+                // 3. 清空单元格内容（必须重新获取 Range）
+                Range clearRange = tbl.Cell(rowIdx, colIdx).Range;
+                clearRange.SetRange(clearRange.Start, clearRange.End - 1);
+                clearRange.Text = "";
+
+                // 4. 构建 SEQ 域参数
                 string fieldText;
                 if (isFirstSeqField && startNumber > 1)
                 {
@@ -911,30 +935,29 @@ namespace WordTools.Services
                 {
                     fieldText = "PhotoNum";
                 }
-        
-                // 6. 在单元格起始位置插入 SEQ 域
-                // 插入域后 Range 会失效，需要重新定位
-                cellRange.SetRange(cellStart, cellStart);
-                cellRange.Fields.Add(cellRange, WdFieldType.wdFieldSequence, fieldText, false);
+
+                // 5. 插入 SEQ 域（必须重新获取 Range）
+                Range insertRange = tbl.Cell(rowIdx, colIdx).Range;
+                insertRange.SetRange(insertRange.Start, insertRange.Start);
+                insertRange.Fields.Add(insertRange, WdFieldType.wdFieldSequence, fieldText, false);
                 isFirstSeqField = false;
-        
-                // 7. 在域后追加 "." 和文件名（域插入后必须重新获取 Range）
-                Range afterField = tbl.Cell(rowIdx, colIdx).Range;
-                afterField.SetRange(afterField.End - 1, afterField.End - 1);
-        
+
+                // 6. 在域后追加 "." 和文件名（必须重新获取 Range）
+                Range appendRange = tbl.Cell(rowIdx, colIdx).Range;
+                appendRange.SetRange(appendRange.End - 1, appendRange.End - 1);
                 if (!string.IsNullOrEmpty(existingText))
                 {
-                    afterField.Text = ". " + existingText;
+                    appendRange.Text = ". " + existingText;
                 }
                 else
                 {
-                    afterField.Text = ".";
+                    appendRange.Text = ".";
                 }
-        
-                // 8. 设置单元格格式（需要重新获取 Range）
-                Range fullRange = tbl.Cell(rowIdx, colIdx).Range;
-                fullRange.SetRange(fullRange.Start, fullRange.End - 1);
-                fullRange.ParagraphFormat.Alignment = alignment;
+
+                // 7. 设置格式（必须重新获取 Range）
+                Range formatRange = tbl.Cell(rowIdx, colIdx).Range;
+                formatRange.SetRange(formatRange.Start, formatRange.End - 1);
+                formatRange.ParagraphFormat.Alignment = alignment;
                 tbl.Cell(rowIdx, colIdx).VerticalAlignment = WdCellVerticalAlignment.wdCellAlignVerticalCenter;
             }
             catch { }
