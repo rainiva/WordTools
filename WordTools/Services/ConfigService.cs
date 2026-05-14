@@ -15,10 +15,12 @@ namespace WordTools.Services
         private const string CONFIG_KEY_LAST_FOLDER_PATH = "LastFolderPath";
         private const string CONFIG_KEY_NEED_DESCRIPTION = "NeedDescription";
         private const string CONFIG_KEY_USE_FILENAME_AS_DESCRIPTION = "UseFilenameAsDescription";
+        private const string CONFIG_KEY_USE_FOLDERNAME_AS_DESCRIPTION = "UseFolderNameAsDescription";
         private const string CONFIG_KEY_INCLUDE_ROOT_IMAGES = "IncludeRootImages";
         private const string CONFIG_KEY_INCLUDE_SUBFOLDER_IMAGES = "IncludeSubFolderImages";
         private const string CONFIG_KEY_AUTO_NUMBERING = "AutoNumbering";
         private const string CONFIG_KEY_NUMBER_ALIGNMENT = "NumberAlignment";
+        private const string CONFIG_KEY_NUMBER_POSITION = "NumberPosition";
 
         // 注册表路径
         private const string REGISTRY_PATH = @"Software\WordTools";
@@ -262,6 +264,30 @@ namespace WordTools.Services
             SetRegistryValue(CONFIG_KEY_USE_FILENAME_AS_DESCRIPTION, strValue);
         }
 
+        /// <summary>
+        /// 获取是否使用文件夹名作为描述
+        /// </summary>
+        public static bool GetUseFolderNameAsDescription(Document doc = null)
+        {
+            var value = doc != null
+                ? GetDocumentProperty(doc, CONFIG_KEY_USE_FOLDERNAME_AS_DESCRIPTION)
+                : GetRegistryValue(CONFIG_KEY_USE_FOLDERNAME_AS_DESCRIPTION);
+            return value == "True";
+        }
+
+        /// <summary>
+        /// 保存是否使用文件夹名作为描述
+        /// </summary>
+        public static void SaveUseFolderNameAsDescription(bool value, Document doc = null)
+        {
+            var strValue = value ? "True" : "False";
+            if (doc != null)
+            {
+                SetDocumentProperty(doc, CONFIG_KEY_USE_FOLDERNAME_AS_DESCRIPTION, strValue);
+            }
+            SetRegistryValue(CONFIG_KEY_USE_FOLDERNAME_AS_DESCRIPTION, strValue);
+        }
+
         #endregion
 
         #region 文件范围配置
@@ -358,6 +384,28 @@ namespace WordTools.Services
         public static void SaveNumberAlignment(int alignment)
         {
             SetRegistryValue(CONFIG_KEY_NUMBER_ALIGNMENT, alignment.ToString());
+        }
+
+        /// <summary>
+        /// 获取编号位置 (1=在前, 2=在后，默认1)
+        /// </summary>
+        public static int GetNumberPosition()
+        {
+            var value = GetRegistryValue(CONFIG_KEY_NUMBER_POSITION, "1");
+            int result;
+            if (int.TryParse(value, out result))
+            {
+                return result == 2 ? 2 : 1; // 只有1或2有效，其他值默认为1
+            }
+            return 1; // 默认编号在前
+        }
+
+        /// <summary>
+        /// 保存编号位置
+        /// </summary>
+        public static void SaveNumberPosition(int position)
+        {
+            SetRegistryValue(CONFIG_KEY_NUMBER_POSITION, position.ToString());
         }
 
         #endregion

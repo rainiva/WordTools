@@ -30,9 +30,12 @@ namespace WordTools.Forms
         private RadioButton optNeedDescription;
         private RadioButton optNoDescription;
         private RadioButton optUseFilename;
+        private RadioButton optUseFolderName;
         private CheckBox chkIncludeRoot;
         private CheckBox chkIncludeSubFolder;
         private CheckBox chkAutoNumbering;
+        private RadioButton optNumberBeforeDesc;
+        private RadioButton optNumberAfterDesc;
         private RadioButton optAlignLeft;
         private RadioButton optAlignCenter;
 
@@ -83,6 +86,9 @@ namespace WordTools.Forms
 
             // 描述选项行
             CreateDescriptionOptionsRow(ref currentTop);
+
+            // 编号位置行
+            CreateNumberPositionRow(ref currentTop);
 
             // 编号对齐行
             CreateAlignmentOptionsRow(ref currentTop);
@@ -232,7 +238,7 @@ namespace WordTools.Forms
             var pnlDescription = new Panel
             {
                 Location = new System.Drawing.Point(S(70), topPos),
-                Size = new Size(S(210), CTRL_HEIGHT),
+                Size = new Size(S(300), CTRL_HEIGHT),
                 BackColor = Theme.Colors.Background
             };
             this.Controls.Add(pnlDescription);
@@ -254,7 +260,7 @@ namespace WordTools.Forms
             optNoDescription = new RadioButton
             {
                 Text = "无",
-                Location = new System.Drawing.Point(S(70), (S(Theme.Layout.CtrlHeight) - S(20)) / 2),
+                Location = new System.Drawing.Point(S(70), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(50), S(20)),
                 Font = Theme.Fonts.Default,
                 ForeColor = Theme.Colors.Text
@@ -266,7 +272,7 @@ namespace WordTools.Forms
             optUseFilename = new RadioButton
             {
                 Text = "文件名",
-                Location = new System.Drawing.Point(S(125), (S(Theme.Layout.CtrlHeight) - S(20)) / 2),
+                Location = new System.Drawing.Point(S(125), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(75), S(20)),
                 Font = Theme.Fonts.Default,
                 ForeColor = Theme.Colors.Text
@@ -274,17 +280,66 @@ namespace WordTools.Forms
             optUseFilename.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optUseFilename);
 
-            // 自动编号复选框（不在 Panel 内，保持独立）
+            // 文件夹名描述
+            optUseFolderName = new RadioButton
+            {
+                Text = "文件夹名",
+                Location = new System.Drawing.Point(S(205), (CTRL_HEIGHT - S(20)) / 2),
+                Size = new Size(S(90), S(20)),
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
+            };
+            optUseFolderName.CheckedChanged += DescriptionOption_CheckedChanged;
+            pnlDescription.Controls.Add(optUseFolderName);
+
+            topPos += LINE_SPACING;
+        }
+
+        private void CreateNumberPositionRow(ref int topPos)
+        {
+            // 自动编号复选框（行首）
             chkAutoNumbering = new CheckBox
             {
                 Text = "自动编号",
-                Location = new System.Drawing.Point(S(285), topPos),
+                Location = new System.Drawing.Point(S(15), topPos),
                 Size = new Size(S(90), CTRL_HEIGHT),
-                Enabled = true, // 手动模式下启用
+                Enabled = true,
                 Font = Theme.Fonts.Default,
                 ForeColor = Theme.Colors.Text
             };
             this.Controls.Add(chkAutoNumbering);
+
+            // 用 Panel 包裹编号位置选项的 RadioButton
+            var pnlNumberPos = new Panel
+            {
+                Location = new System.Drawing.Point(S(110), topPos),
+                Size = new Size(S(200), CTRL_HEIGHT),
+                BackColor = Theme.Colors.Background
+            };
+            this.Controls.Add(pnlNumberPos);
+
+            // 编号在描述前面（默认选中）
+            optNumberBeforeDesc = new RadioButton
+            {
+                Text = "编号在前",
+                Location = new System.Drawing.Point(S(5), (CTRL_HEIGHT - S(20)) / 2),
+                Size = new Size(S(85), S(20)),
+                Checked = true,
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
+            };
+            pnlNumberPos.Controls.Add(optNumberBeforeDesc);
+
+            // 编号在描述后面
+            optNumberAfterDesc = new RadioButton
+            {
+                Text = "编号在后",
+                Location = new System.Drawing.Point(S(95), (CTRL_HEIGHT - S(20)) / 2),
+                Size = new Size(S(85), S(20)),
+                Font = Theme.Fonts.Default,
+                ForeColor = Theme.Colors.Text
+            };
+            pnlNumberPos.Controls.Add(optNumberAfterDesc);
 
             topPos += LINE_SPACING;
         }
@@ -327,7 +382,7 @@ namespace WordTools.Forms
             optAlignCenter = new RadioButton
             {
                 Text = "居中",
-                Location = new System.Drawing.Point(S(70), (S(Theme.Layout.CtrlHeight) - S(20)) / 2),
+                Location = new System.Drawing.Point(S(70), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(60), S(20)),
                 Checked = true,
                 Font = Theme.Fonts.Default,
@@ -378,8 +433,13 @@ namespace WordTools.Forms
                 
                 bool needDesc = ConfigService.GetNeedDescription(doc);
                 bool useFilename = ConfigService.GetUseFilenameAsDescription(doc);
-                
-                if (useFilename)
+                bool useFolderName = ConfigService.GetUseFolderNameAsDescription(doc);
+
+                if (useFolderName)
+                {
+                    optUseFolderName.Checked = true;
+                }
+                else if (useFilename)
                 {
                     optUseFilename.Checked = true;
                 }
@@ -406,6 +466,16 @@ namespace WordTools.Forms
                     optAlignCenter.Checked = true;
                 }
 
+                int numberPosition = ConfigService.GetNumberPosition();
+                if (numberPosition == 2)
+                {
+                    optNumberAfterDesc.Checked = true;
+                }
+                else
+                {
+                    optNumberBeforeDesc.Checked = true;
+                }
+
                 UpdateAutoNumberingState();
             }
             catch
@@ -426,6 +496,8 @@ namespace WordTools.Forms
                 ConfigService.SaveLastFolderPath(txtFolderPath.Text, doc);
                 ConfigService.SaveNeedDescription(optNeedDescription.Checked, doc);
                 ConfigService.SaveUseFilenameAsDescription(optUseFilename.Checked, doc);
+                ConfigService.SaveUseFolderNameAsDescription(optUseFolderName.Checked, doc);
+                ConfigService.SaveNumberPosition(optNumberAfterDesc.Checked ? 2 : 1);
                 ConfigService.SaveIncludeRootImages(chkIncludeRoot.Checked, doc);
                 ConfigService.SaveIncludeSubFolderImages(chkIncludeSubFolder.Checked, doc);
                 ConfigService.SaveAutoNumbering(chkAutoNumbering.Checked);
@@ -448,17 +520,21 @@ namespace WordTools.Forms
 
         private void UpdateAutoNumberingState()
         {
-            // 无描述模式下禁用自动编号
+            // 无描述模式下禁用自动编号和编号位置
             if (optNoDescription.Checked)
             {
                 chkAutoNumbering.Enabled = false;
                 chkAutoNumbering.Checked = false;
                 chkAutoNumbering.ForeColor = Theme.Colors.TextDisabled;
+                optNumberBeforeDesc.Enabled = false;
+                optNumberAfterDesc.Enabled = false;
             }
             else
             {
                 chkAutoNumbering.Enabled = true;
                 chkAutoNumbering.ForeColor = Theme.Colors.Text;
+                optNumberBeforeDesc.Enabled = true;
+                optNumberAfterDesc.Enabled = true;
             }
         }
 
@@ -502,23 +578,35 @@ namespace WordTools.Forms
 
                 bool needDescription = optNeedDescription.Checked;
                 bool useFileNameAsDescription = optUseFilename.Checked;
+                bool useFolderNameAsDescription = optUseFolderName.Checked;
                 bool includeRootImages = chkIncludeRoot.Checked;
                 bool includeSubFolderImages = chkIncludeSubFolder.Checked;
                 bool needAutoNumbering = chkAutoNumbering.Checked;
                 int numberAlignment = optAlignCenter.Checked ? 2 : 1; // 2=居中, 1=靠左
+                int numberPosition = optNumberAfterDesc.Checked ? 2 : 1; // 2=在后, 1=在前
 
                 this.Hide();
+                // 将Word窗口置顶，确保插图过程中Word保持可见
+                try
+                {
+                    if (_application != null && _application.ActiveWindow != null)
+                    {
+                        _application.ActiveWindow.WindowState = Microsoft.Office.Interop.Word.WdWindowState.wdWindowStateNormal;
+                        _application.ActiveWindow.Activate();
+                    }
+                }
+                catch { }
                 System.Windows.Forms.Application.DoEvents();
 
                 var progressService = new ProgressService(_application);
                 progressService.InsertPhotosWithProgress(
                     folderPath, minHeight, needDescription,
-                    useFileNameAsDescription, includeRootImages, includeSubFolderImages,
-                    needAutoNumbering, numberAlignment);
+                    useFileNameAsDescription, useFolderNameAsDescription, includeRootImages, includeSubFolderImages,
+                    needAutoNumbering, numberAlignment, numberPosition);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误", 
+                MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -541,7 +629,7 @@ namespace WordTools.Forms
                 float minHeight;
                 if (!ImageService.ValidateAndConvertHeight(txtImageHeight.Text, out minHeight))
                 {
-                    MessageBox.Show("输入的高度无效，请输入大于 0 的数字。", "提示", 
+                    MessageBox.Show("输入的高度无效，请输入大于 0 的数字。", "提示",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
@@ -550,20 +638,32 @@ namespace WordTools.Forms
 
                 bool needDescription = optNeedDescription.Checked;
                 bool useFileNameAsDescription = optUseFilename.Checked;
+                bool useFolderNameAsDescription = optUseFolderName.Checked;
                 bool needAutoNumbering = chkAutoNumbering.Checked;
                 int numberAlignment = optAlignCenter.Checked ? 2 : 1; // 2=居中, 1=靠左
+                int numberPosition = optNumberAfterDesc.Checked ? 2 : 1; // 2=在后, 1=在前
 
                 this.Hide();
+                // 将Word窗口置顶，确保插图过程中Word保持可见
+                try
+                {
+                    if (_application != null && _application.ActiveWindow != null)
+                    {
+                        _application.ActiveWindow.WindowState = Microsoft.Office.Interop.Word.WdWindowState.wdWindowStateNormal;
+                        _application.ActiveWindow.Activate();
+                    }
+                }
+                catch { }
                 System.Windows.Forms.Application.DoEvents();
 
                 var progressService = new ProgressService(_application);
                 progressService.InsertSelectedPhotosWithProgress(
                     selectedFiles, minHeight, needDescription,
-                    useFileNameAsDescription, needAutoNumbering, numberAlignment);
+                    useFileNameAsDescription, useFolderNameAsDescription, needAutoNumbering, numberAlignment, numberPosition);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误", 
+                MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

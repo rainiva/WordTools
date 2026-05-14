@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Word;
 
 namespace WordTools.Services
@@ -135,7 +136,7 @@ namespace WordTools.Services
         }
 
         /// <summary>
-        /// 快速插入图片（最小化内存使用）
+        /// 快速插入图片（最小化内存使用，优化性能）
         /// </summary>
         /// <param name="targetCell">目标单元格</param>
         /// <param name="imagePath">图片文件路径</param>
@@ -147,33 +148,43 @@ namespace WordTools.Services
 
             try
             {
-                // 获取单元格宽度
+                // 缓存单元格尺寸，避免重复 COM 调用
                 float cellWidth = targetCell.Width - 6;
+                float cellHeight = targetCell.Height - 6;
 
                 // 清空单元格现有内容
                 targetCell.Range.Text = "";
 
-                // 插入图片
+                // 插入图片（使用 LinkToFile=true 可减少内存占用，但图片不会嵌入文档）
+                // 这里仍使用 SaveWithDocument=true 确保文档可移植
                 var p = targetCell.Range.InlineShapes.AddPicture(
                     FileName: imagePath,
                     LinkToFile: false,
                     SaveWithDocument: true);
 
-                // msoTrue = -1
+                // 设置锁定宽高比（msoTrue = -1）
                 ((dynamic)p).LockAspectRatio = -1;
 
-                // 快速调整：检查宽度限制
+                // 一次性计算并应用缩放（减少 COM 交互次数）
+                float scaleRatio = 1.0f;
+
+                // 根据宽度限制计算缩放比例
                 if (p.Width > cellWidth)
                 {
-                    p.Width = cellWidth;
+                    scaleRatio = cellWidth / p.Width;
                 }
 
-                // 检查高度限制：如果按宽度缩放后高度仍超出可用高度，则按高度再次缩放
-                float cellHeight = targetCell.Height - 6;
-                if (cellHeight > 10 && p.Height > cellHeight)
+                // 根据高度限制调整缩放比例
+                float scaledHeight = p.Height * scaleRatio;
+                if (cellHeight > 10 && scaledHeight > cellHeight)
                 {
-                    // 按高度缩放会保持宽高比，因为 LockAspectRatio = -1 (msoTrue)
-                    p.Height = cellHeight;
+                    scaleRatio = cellHeight / p.Height;
+                }
+
+                // 应用缩放（只设置一次 Width，Height 会自动按比例调整）
+                if (scaleRatio < 1.0f)
+                {
+                    p.Width = p.Width * scaleRatio;
                 }
 
                 // 最小高度限制
@@ -181,6 +192,9 @@ namespace WordTools.Services
                 {
                     p.Height = minHeightPoints;
                 }
+
+                // 释放 COM 对象引用
+                Marshal.ReleaseComObject(p);
             }
             catch (Exception)
             {
@@ -302,8 +316,7 @@ namespace WordTools.Services
                     added += batch;
                     remaining -= batch;
 
-                    // 更新进度
-                    app.StatusBar = string.Format("正在准备表格... {0}/{1}", added, rowCount);
+                    // 预分配行数进度由进度窗口统一显示，不再更新状态栏
                     System.Windows.Forms.Application.DoEvents();
                 }
             }

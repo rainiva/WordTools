@@ -69,6 +69,20 @@ New-ItemProperty -Path $RegistryPath -Name "LoadBehavior" -Value 3 -PropertyType
 New-ItemProperty -Path $RegistryPath -Name "CommandLineSafe" -Value 0 -PropertyType DWORD -Force | Out-Null
 
 Write-Host ""
+Write-Host "正在执行 NGen 预编译..." -ForegroundColor Yellow
+$NGEN_PATH = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
+if (Test-Path $NGEN_PATH) {
+    & $NGEN_PATH install $DLL_PATH
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "NGen 预编译完成" -ForegroundColor Green
+    } else {
+        Write-Host "警告: NGen 预编译失败，插件仍可正常工作" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "警告: 找不到 ngen.exe，跳过预编译" -ForegroundColor Yellow
+}
+
+Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "注册成功！" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green

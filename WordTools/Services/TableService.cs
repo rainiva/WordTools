@@ -409,7 +409,11 @@ namespace WordTools.Services
         /// <summary>
         /// 插入文件名描述行
         /// </summary>
-        public static void InsertFileNameDescriptionRow(Table tbl, ref int rowIndex, string[] fileNames)
+        /// <param name="tbl">表格对象</param>
+        /// <param name="rowIndex">行索引（引用，方法内会递增）</param>
+        /// <param name="descriptions">描述文本数组（可以是文件路径或纯文本）</param>
+        /// <param name="isFilePath">描述是否为文件路径（true=提取文件名，false=直接使用）</param>
+        public static void InsertFileNameDescriptionRow(Table tbl, ref int rowIndex, string[] descriptions, bool isFilePath = true)
         {
             if (tbl == null) return;
 
@@ -418,18 +422,20 @@ namespace WordTools.Services
                 EnsureRowExists(tbl, rowIndex);
                 AdjustTableColumns(tbl, 2);
 
-                // 插入文件名到对应列
-                for (int i = 0; i < Math.Min(fileNames.Length, 2); i++)
+                // 插入描述文本到对应列
+                for (int i = 0; i < Math.Min(descriptions.Length, 2); i++)
                 {
-                    string baseName = FileService.GetFileNameWithoutExtension(fileNames[i]);
+                    string displayText = isFilePath
+                        ? FileService.GetFileNameWithoutExtension(descriptions[i])
+                        : descriptions[i];
                     var cell = tbl.Cell(rowIndex, i + 1);
-                    cell.Range.Text = baseName;
+                    cell.Range.Text = displayText;
                     cell.Range.ParagraphFormat.Alignment = WdParagraphAlignment.wdAlignParagraphCenter;
                     cell.VerticalAlignment = WdCellVerticalAlignment.wdCellAlignVerticalCenter;
                 }
 
-                // 如果只有一个文件，第二列留空
-                if (fileNames.Length < 2)
+                // 如果只有一个描述，第二列留空
+                if (descriptions.Length < 2)
                 {
                     var cell2 = tbl.Cell(rowIndex, 2);
                     cell2.Range.Text = "";
@@ -1612,21 +1618,23 @@ namespace WordTools.Services
         /// <param name="alignment">对齐方式</param>
         /// <param name="number">编号值</param>
         /// <param name="skipFieldCheck">是否跳过 SEQ 域检查（新插入的行可设为 true 以提升性能）</param>
+        /// <param name="numberPosition">编号位置（1=在前，2=在后）</param>
         public static void InsertNumberText(Table tbl, int row, int col,
-            WdParagraphAlignment alignment, int number, bool skipFieldCheck = false)
+            WdParagraphAlignment alignment, int number, bool skipFieldCheck = false, int numberPosition = 1)
         {
             try
             {
                 Cell cell = tbl.Cell(row, col);
                 Range cellRange = cell.Range;
                 cellRange.SetRange(cellRange.Start, cellRange.End - 1);
-                
+
                 // 获取现有文本内容（如果有）
                 string existingText = cellRange.Text ?? "";
                 existingText = existingText.Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
-                // 去掉可能的旧编号前缀
-                existingText = Regex.Replace(existingText, @"^\d*\.?\s*", "");
-                
+                // 去掉可能的旧编号前缀（格式：数字+点号+空格，如 "1. "、"12. "）
+                // 注意：只匹配完整的编号格式，避免误删描述文本开头的数字
+                existingText = Regex.Replace(existingText, @"^\d+\.\s+", "");
+
                 // 删除所有旧 SEQ 域（向后兼容，但新插入的行可跳过以提升性能）
                 if (!skipFieldCheck)
                 {
@@ -1639,21 +1647,30 @@ namespace WordTools.Services
                         }
                         catch { }
                     }
-                    
+
                     // 重新获取 Range（删除域后原 Range 可能失效）
                     cellRange = cell.Range;
                     cellRange.SetRange(cellRange.Start, cellRange.End - 1);
                 }
-                
-                // 直接写入新文本（包含编号和原有内容），不先清空
+
+                // 根据编号位置生成新文本
                 string newText;
-                if (!string.IsNullOrEmpty(existingText))
-                    newText = number + ". " + existingText;
+                if (numberPosition == 2 && !string.IsNullOrEmpty(existingText))
+                {
+                    // 编号在描述后面：描述-编号
+                    newText = existingText + "-" + number;
+                }
                 else
-                    newText = number + ".";
-                
+                {
+                    // 编号在描述前面（默认）：编号. 描述
+                    if (!string.IsNullOrEmpty(existingText))
+                        newText = number + ". " + existingText;
+                    else
+                        newText = number + ".";
+                }
+
                 cellRange.Text = newText;
-                
+
                 // 重新获取 Range 设置对齐（Text赋值后Range失效）
                 cellRange = cell.Range;
                 cellRange.SetRange(cellRange.Start, cellRange.End - 1);

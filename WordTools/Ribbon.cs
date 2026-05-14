@@ -10,23 +10,13 @@ using Office = Microsoft.Office.Core;
 
 namespace WordTools
 {
-    [ComVisible(true)]
-    public partial class Ribbon : Office.IRibbonExtensibility
+    public partial class Ribbon
     {
         private Office.IRibbonUI ribbon;
 
         public Ribbon()
         {
         }
-
-        #region IRibbonExtensibility 成员
-
-        public string GetCustomUI(string ribbonID)
-        {
-            return GetResourceText("WordTools.Ribbon.xml");
-        }
-
-        #endregion
 
         #region Ribbon 回调
 

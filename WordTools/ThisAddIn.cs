@@ -17,6 +17,28 @@ namespace WordTools
     public partial class ThisAddIn : IDTExtensibility2, Office.IRibbonExtensibility
     {
         private Office.IRibbonUI ribbonUI;
+        private static readonly string _ribbonXml = LoadRibbonXml();
+
+        /// <summary>
+        /// 从嵌入资源中加载并缓存 Ribbon XML
+        /// </summary>
+        private static string LoadRibbonXml()
+        {
+            Assembly asm = Assembly.GetExecutingAssembly();
+            string[] resourceNames = asm.GetManifestResourceNames();
+            for (int i = 0; i < resourceNames.Length; ++i)
+            {
+                if (string.Compare("WordTools.Ribbon.xml", resourceNames[i], StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    using (var stream = asm.GetManifestResourceStream(resourceNames[i]))
+                    using (var reader = new StreamReader(stream))
+                    {
+                        return reader.ReadToEnd();
+                    }
+                }
+            }
+            return null;
+        }
 
         /// <summary>
         /// COM 类必须有无参数构造函数
@@ -36,10 +58,21 @@ namespace WordTools
 
         public void OnConnection(object Application, ext_ConnectMode ConnectMode, object AddInInst, ref System.Array custom)
         {
-            Globals.ThisAddIn = this;
-            Globals.Application = (Word.Application)Application;
             this.Application = (Word.Application)Application;
-            ThisAddIn_Startup(this, EventArgs.Empty);
+
+            if (Globals.ThisAddIn == null)
+            {
+                Globals.ThisAddIn = this;
+            }
+            if (Globals.Application == null)
+            {
+                Globals.Application = this.Application;
+            }
+
+            if (ConnectMode == ext_ConnectMode.ext_cm_Startup || ConnectMode == ext_ConnectMode.ext_cm_External)
+            {
+                ThisAddIn_Startup(this, EventArgs.Empty);
+            }
         }
 
         public void OnDisconnection(ext_DisconnectMode RemoveMode, ref System.Array custom)
@@ -65,20 +98,7 @@ namespace WordTools
 
         public string GetCustomUI(string RibbonID)
         {
-            Assembly asm = Assembly.GetExecutingAssembly();
-            string[] resourceNames = asm.GetManifestResourceNames();
-            for (int i = 0; i < resourceNames.Length; ++i)
-            {
-                if (string.Compare("WordTools.Ribbon.xml", resourceNames[i], StringComparison.OrdinalIgnoreCase) == 0)
-                {
-                    using (var stream = asm.GetManifestResourceStream(resourceNames[i]))
-                    using (var reader = new StreamReader(stream))
-                    {
-                        return reader.ReadToEnd();
-                    }
-                }
-            }
-            return null;
+            return _ribbonXml;
         }
 
         #endregion

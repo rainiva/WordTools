@@ -62,6 +62,20 @@ if %errorLevel% neq 0 (
 )
 
 echo.
+echo [3/3] NGen 预编译...
+set NGEN_PATH=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\ngen.exe
+if exist "%NGEN_PATH%" (
+    "%NGEN_PATH%" install "%DLL_PATH%"
+    if %errorlevel% equ 0 (
+        echo NGen 预编译完成
+    ) else (
+        echo 警告: NGen 预编译失败，插件仍可正常工作
+    )
+) else (
+    echo 警告: 找不到 ngen.exe，跳过预编译
+)
+
+echo.
 echo ========================================
 echo 注册成功！
 echo ========================================

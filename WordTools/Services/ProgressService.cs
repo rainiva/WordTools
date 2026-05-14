@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Word;
+using WordTools.Forms;
 using Application = Microsoft.Office.Interop.Word.Application;
 
 namespace WordTools.Services
@@ -14,10 +15,22 @@ namespace WordTools.Services
     /// </summary>
     public class ProgressService
     {
-        // Windows API 声明（用于检测按键）
+        // Windows API 声明（用于检测按键和窗口置顶）
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
         private const int VK_ESCAPE = 0x1B;
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_SHOWWINDOW = 0x0040;
 
         private readonly Application _application;
         private bool _isCancelled;
@@ -27,10 +40,16 @@ namespace WordTools.Services
         private int _memoryCleanInterval = 50;
         private int _saveInterval = 200;
         private int _fullGcInterval;  // 全代 GC 间隔
+        private int _statusBarUpdateInterval = 1;  // 状态栏更新间隔（每N张图片更新一次）
+        private DateTime _lastStatusBarUpdate = DateTime.MinValue;  // 上次状态栏更新时间
+        private const int STATUS_BAR_VISIBLE_MS = 500;  // 状态栏最小可见时间（毫秒），确保用户能看清
 
         // 性能模式备份
         private bool _originalScreenUpdating;
         private bool _originalDisplayAlerts;
+
+        // 进度窗口
+        private ProgressForm _progressForm;
 
         public ProgressService(Application application)
         {
@@ -48,11 +67,18 @@ namespace WordTools.Services
         }
 
         /// <summary>
-        /// 检查是否需要取消
+        /// 检查是否需要取消（支持ESC键和进度窗口取消按钮）
         /// </summary>
         private bool ShouldCancel()
         {
             if (_isCancelled) return true;
+
+            // 检查进度窗口是否点击了取消
+            if (_progressForm != null && !_progressForm.IsDisposed && _progressForm.IsCancelled)
+            {
+                _isCancelled = true;
+                return true;
+            }
 
             if (CheckEscapeKey())
             {
@@ -70,7 +96,7 @@ namespace WordTools.Services
         #region 性能优化
 
         /// <summary>
-        /// 进入高性能模式
+        /// 进入高性能模式（关闭 ScreenUpdating 以最大化插图性能）
         /// </summary>
         private void EnterHighPerformanceMode()
         {
@@ -79,6 +105,7 @@ namespace WordTools.Services
                 _originalScreenUpdating = _application.ScreenUpdating;
                 _originalDisplayAlerts = _application.DisplayAlerts != WdAlertLevel.wdAlertsNone;
 
+                // 关闭 ScreenUpdating 以提升插图性能（进度由独立窗口显示）
                 _application.ScreenUpdating = false;
                 _application.DisplayAlerts = WdAlertLevel.wdAlertsNone;
 
@@ -124,6 +151,18 @@ namespace WordTools.Services
         }
 
         /// <summary>
+        /// 根据文件数量获取进度更新间隔
+        /// 大量图片时降低更新频率以最大化插图性能
+        /// </summary>
+        private int GetStatusBarUpdateInterval(int totalFiles)
+        {
+            if (totalFiles <= 10) return 1;     // 10张以内：每张都更新
+            if (totalFiles <= 50) return 5;     // 50张以内：每5张更新
+            if (totalFiles <= 200) return 10;   // 200张以内：每10张更新
+            return 20;                           // 更多：每20张更新（最大化性能）
+        }
+
+        /// <summary>
         /// 清理内存（分级 GC 策略）
         /// </summary>
         private void CleanupMemory(int processedCount)
@@ -164,9 +203,9 @@ namespace WordTools.Services
         /// 批量插图主入口（带进度）
         /// </summary>
         public void InsertPhotosWithProgress(string folderPath, float minHeight,
-            bool needDescription, bool useFileNameAsDescription,
+            bool needDescription, bool useFileNameAsDescription, bool useFolderNameAsDescription,
             bool includeRootImages, bool includeSubFolderImages,
-            bool needAutoNumbering, int numberAlignment = 2)
+            bool needAutoNumbering, int numberAlignment = 2, int numberPosition = 1)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -266,12 +305,18 @@ namespace WordTools.Services
 
                 // 设置优化参数
                 _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
+                _statusBarUpdateInterval = GetStatusBarUpdateInterval(totalFiles);
                 _memoryCleanInterval = _refreshInterval * 10;
                 _fullGcInterval = _memoryCleanInterval * 5;
                 _saveInterval = _refreshInterval * 20;
 
-                // 进入高性能模式
+                // 进入高性能模式（关闭 ScreenUpdating 以提升性能）
                 EnterHighPerformanceMode();
+
+                // 创建并显示进度窗口（独立于 Word，不受 ScreenUpdating 影响）
+                _progressForm = new ProgressForm(totalFiles);
+                _progressForm.Show();
+                System.Windows.Forms.Application.DoEvents();
 
                 // 编号准备
                 WdParagraphAlignment wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter;
@@ -294,8 +339,7 @@ namespace WordTools.Services
                 ImageService.PreAllocateRows(tbl, totalFiles, 2, needDescription, _application);
                 t3 = sw.ElapsedMilliseconds;
 
-                _application.StatusBar = string.Format("准备插入 {0} 张图片...", totalFiles);
-                System.Windows.Forms.Application.DoEvents();
+                // 进度窗口已显示，无需状态栏提示
 
                 // 获取文件夹名称
                 string rootFolderName = FileService.GetFolderName(folderPath);
@@ -308,8 +352,8 @@ namespace WordTools.Services
 
                     // 处理文件
                     ProcessFileBatch(imageFiles.RootFiles, tbl, ref rowIndex, minHeight, needDescription,
-                        useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                        totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, ref currentNumber);
+                        useFileNameAsDescription, useFolderNameAsDescription, rootFolderName, ref processedCount, ref successCount, ref failCount,
+                        totalFiles, startTime, needAutoNumbering, wdAlignment, numberPosition, ref isFirstSeqField, ref currentNumber);
                 }
 
                 // 处理子文件夹
@@ -328,17 +372,14 @@ namespace WordTools.Services
                             TableService.CreateTitleRow(tbl, ref rowIndex, subfolderName);
 
                             ProcessFileBatch(subFiles, tbl, ref rowIndex, minHeight, needDescription,
-                                useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                                totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, ref currentNumber);
+                                useFileNameAsDescription, useFolderNameAsDescription, subfolderName, ref processedCount, ref successCount, ref failCount,
+                                totalFiles, startTime, needAutoNumbering, wdAlignment, numberPosition, ref isFirstSeqField, ref currentNumber);
 
                             // 释放引用，帮助垃圾回收
                             imageFiles.SubfolderFiles[subfolder] = null;
                         }
                     }
                 }
-
-                // 完成
-                _application.StatusBar = string.Format("完成！成功: {0} 失败: {1}", successCount, failCount);
 
                 // 记录t4（图片插入完成时间）
                 t4 = sw.ElapsedMilliseconds;
@@ -360,6 +401,12 @@ namespace WordTools.Services
                     $"预分配行: {t3 - t2}ms\n" +
                     $"插入图片: {t4 - t3}ms\n" +
                     $"收尾: {t5 - t4}ms";
+
+                // 更新进度窗口为完成状态
+                if (_progressForm != null && !_progressForm.IsDisposed)
+                {
+                    _progressForm.ShowCompletion(successCount, failCount, seconds);
+                }
 
                 if (_isCancelled)
                 {
@@ -410,6 +457,13 @@ namespace WordTools.Services
                 }
                 catch { }
 
+                // 关闭进度窗口
+                if (_progressForm != null && !_progressForm.IsDisposed)
+                {
+                    _progressForm.Close();
+                    _progressForm = null;
+                }
+
                 _application.StatusBar = "";
             }
         }
@@ -422,7 +476,8 @@ namespace WordTools.Services
         /// 插入选中的图片（带进度）
         /// </summary>
         public void InsertSelectedPhotosWithProgress(string[] files, float minHeight,
-            bool needDescription, bool useFileNameAsDescription, bool needAutoNumbering, int numberAlignment = 2)
+            bool needDescription, bool useFileNameAsDescription, bool useFolderNameAsDescription,
+            bool needAutoNumbering, int numberAlignment = 2, int numberPosition = 1)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             _isCancelled = false;
@@ -461,6 +516,7 @@ namespace WordTools.Services
 
                 int totalFiles = files.Length;
                 _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
+                _statusBarUpdateInterval = GetStatusBarUpdateInterval(totalFiles);
 
                 // 清除 startRow 之后的编号（增量模式，不影响前面已有的编号）
                 // 优化：只在 startRow 位于现有内容范围内且 startRow 之后有实际内容时才清理
@@ -497,6 +553,11 @@ namespace WordTools.Services
 
                 EnterHighPerformanceMode();
 
+                // 创建并显示进度窗口（独立于 Word，不受 ScreenUpdating 影响）
+                _progressForm = new ProgressForm(totalFiles);
+                _progressForm.Show();
+                System.Windows.Forms.Application.DoEvents();
+
                 // 编号准备
                 WdParagraphAlignment wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter;
                 switch (numberAlignment)
@@ -513,22 +574,23 @@ namespace WordTools.Services
                 }
                 int currentNumber = startNumber;
 
-                _application.StatusBar = string.Format("准备插入 {0} 张图片...", totalFiles);
-                System.Windows.Forms.Application.DoEvents();
-
                 // 处理文件
+                string folderName = FileService.GetFolderName(FileService.GetParentFolder(files[0]));
                 ProcessFileBatch(files, tbl, ref rowIndex, minHeight, needDescription,
-                    useFileNameAsDescription, ref processedCount, ref successCount, ref failCount,
-                    totalFiles, startTime, needAutoNumbering, wdAlignment, ref isFirstSeqField, ref currentNumber);
-
-                // 完成
-                _application.StatusBar = string.Format("完成！成功: {0} 失败: {1}", successCount, failCount);
+                    useFileNameAsDescription, useFolderNameAsDescription, folderName, ref processedCount, ref successCount, ref failCount,
+                    totalFiles, startTime, needAutoNumbering, wdAlignment, numberPosition, ref isFirstSeqField, ref currentNumber);
 
                 stopwatch.Stop();
                 double seconds = stopwatch.Elapsed.TotalSeconds;
                 string timeInfo = seconds >= 60
                     ? $"{(int)(seconds / 60)}分{seconds % 60:F1}秒"
                     : $"{seconds:F1}秒";
+
+                // 更新进度窗口为完成状态
+                if (_progressForm != null && !_progressForm.IsDisposed)
+                {
+                    _progressForm.ShowCompletion(successCount, failCount, seconds);
+                }
 
                 if (_isCancelled)
                 {
@@ -573,6 +635,13 @@ namespace WordTools.Services
                 }
                 catch { }
 
+                // 关闭进度窗口
+                if (_progressForm != null && !_progressForm.IsDisposed)
+                {
+                    _progressForm.Close();
+                    _progressForm = null;
+                }
+
                 _application.StatusBar = "";
             }
         }
@@ -585,10 +654,11 @@ namespace WordTools.Services
         /// 处理一批文件
         /// </summary>
         private void ProcessFileBatch(string[] files, Table tbl, ref int rowIndex,
-            float minHeight, bool needDescription, bool useFileNameAsDescription,
+            float minHeight, bool needDescription, bool useFileNameAsDescription, bool useFolderNameAsDescription,
+            string folderName,
             ref int processedCount, ref int successCount, ref int failCount,
             int totalFiles, DateTime startTime,
-            bool needAutoNumbering, WdParagraphAlignment numberAlignment,
+            bool needAutoNumbering, WdParagraphAlignment numberAlignment, int numberPosition,
             ref bool isFirstSeqField, ref int currentNumber)
         {
             var currentRowFiles = new List<string>();
@@ -606,10 +676,11 @@ namespace WordTools.Services
                 string filePath = files[i];
                 string fileName = FileService.GetFileName(filePath);
 
-                // 更新进度
-                if (processedCount % _refreshInterval == 0)
+                // 更新进度窗口
+                if (processedCount % _statusBarUpdateInterval == 0)
                 {
                     UpdateStatusBar(processedCount, totalFiles, fileName, startTime);
+                    // 处理消息队列，确保进度窗口 UI 更新
                     System.Windows.Forms.Application.DoEvents();
                 }
 
@@ -653,28 +724,36 @@ namespace WordTools.Services
                     ImageService.InsertImageFast(tbl.Cell(rowIndex, colIndex), filePath, minHeight);
                     successCount++;
 
-                    // 记录文件名
+                    // 记录文件名或文件夹名
                     if (useFileNameAsDescription)
                     {
                         currentRowFiles.Add(filePath);
+                    }
+                    else if (useFolderNameAsDescription)
+                    {
+                        // 去掉文件夹名前面的序号
+                        // 支持格式："1-名称"、"1.名称"、"01 名称"、"01. 名称"、"1 - 名称" 等
+                        string cleanedFolderName = System.Text.RegularExpressions.Regex.Replace(folderName, @"^\d+\s*[\.\-]?\s*", "");
+                        currentRowFiles.Add(cleanedFolderName);
                     }
 
                     // 行满处理
                     if ((i + 1) % 2 == 0 && i < files.Length - 1)
                     {
-                        if (useFileNameAsDescription)
+                        if (useFileNameAsDescription || useFolderNameAsDescription)
                         {
                             rowIndex++;
                             TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
                             // 保存当前行号，因为 InsertFileNameDescriptionRow 会递增 rowIndex
                             int descriptionRow = rowIndex;
-                            TableService.InsertFileNameDescriptionRow(tbl, ref rowIndex, currentRowFiles.ToArray());
+                            bool descriptionsAreFilePaths = useFileNameAsDescription && !useFolderNameAsDescription;
+                            TableService.InsertFileNameDescriptionRow(tbl, ref rowIndex, currentRowFiles.ToArray(), descriptionsAreFilePaths);
                             // 内联编号：直接插入纯文本编号，每列独立递增
                             if (needAutoNumbering)
                             {
                                 for (int col = 1; col <= 2; col++)
                                 {
-                                    try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true); }
+                                    try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
                                     catch { }
                                     currentNumber++; // 每列递增
                                 }
@@ -691,7 +770,7 @@ namespace WordTools.Services
                             {
                                 for (int col = 1; col <= 2; col++)
                                 {
-                                    try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true); }
+                                    try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
                                     catch { }
                                     currentNumber++; // 每列递增
                                 }
@@ -727,19 +806,20 @@ namespace WordTools.Services
             }
 
             // 处理末尾的描述行
-            if (useFileNameAsDescription && currentRowFiles.Count > 0)
+            if ((useFileNameAsDescription || useFolderNameAsDescription) && currentRowFiles.Count > 0)
             {
                 rowIndex++;
                 TableService.EnsureRowExists(tbl, rowIndex, ref cachedRowCount);
                 // 保存当前行号，因为 InsertFileNameDescriptionRow 会递增 rowIndex
                 int descriptionRow = rowIndex;
-                TableService.InsertFileNameDescriptionRow(tbl, ref rowIndex, currentRowFiles.ToArray());
+                bool descriptionsAreFilePaths = useFileNameAsDescription && !useFolderNameAsDescription;
+                TableService.InsertFileNameDescriptionRow(tbl, ref rowIndex, currentRowFiles.ToArray(), descriptionsAreFilePaths);
                 // 内联编号，每列独立递增
                 if (needAutoNumbering)
                 {
                     for (int col = 1; col <= 2; col++)
                     {
-                        try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true); }
+                        try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
                         catch { }
                         currentNumber++; // 每列递增
                     }
@@ -755,7 +835,7 @@ namespace WordTools.Services
                 {
                     for (int col = 1; col <= 2; col++)
                     {
-                        try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true); }
+                        try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
                         catch { }
                         currentNumber++; // 每列递增
                     }
@@ -772,32 +852,75 @@ namespace WordTools.Services
         #region 状态栏更新
 
         /// <summary>
-        /// 更新状态栏
+        /// 更新进度窗口和状态栏
         /// </summary>
         private void UpdateStatusBar(int current, int total, string currentFile, DateTime startTime)
         {
             try
             {
-                int percent = total > 0 ? (int)((double)current / total * 100) : 0;
-                var elapsed = DateTime.Now - startTime;
-                double remaining = 0;
-
-                if (current > 0)
+                // 检查距离上次更新是否超过最小可见时间，避免更新过于频繁
+                var now = DateTime.Now;
+                var elapsedSinceLastUpdate = (now - _lastStatusBarUpdate).TotalMilliseconds;
+                if (elapsedSinceLastUpdate < STATUS_BAR_VISIBLE_MS && _lastStatusBarUpdate != DateTime.MinValue)
                 {
-                    remaining = elapsed.TotalSeconds / current * (total - current);
+                    return;
                 }
+                _lastStatusBarUpdate = now;
 
-                string shortFileName = currentFile.Length > 30 
-                    ? "..." + currentFile.Substring(currentFile.Length - 27) 
+                int percent = total > 0 ? (int)((double)current / total * 100) : 0;
+                var elapsed = now - startTime;
+
+                string shortFileName = currentFile.Length > 30
+                    ? "..." + currentFile.Substring(currentFile.Length - 27)
                     : currentFile;
 
-                _application.StatusBar = string.Format("插入图片 {0}/{1} ({2}%) - 已用:{3:F0}s 剩余:{4:F0}s - {5}",
-                    current, total, percent, elapsed.TotalSeconds, remaining, shortFileName);
+                // 更新进度窗口（独立于 Word，不受 ScreenUpdating 影响）
+                if (_progressForm != null && !_progressForm.IsDisposed)
+                {
+                    _progressForm.UpdateProgress(current, total, shortFileName, elapsed);
+                    // 确保进度窗口保持置顶
+                    EnsureWindowTopMost(_progressForm.Handle);
+                }
+
+                // 确保 Word 窗口保持在前台可见
+                EnsureWordWindowActive();
+
+                // 进度由独立窗口显示，不再更新 Word 状态栏
             }
             catch
             {
                 // 忽略错误
             }
+        }
+
+        /// <summary>
+        /// 确保窗口保持置顶（使用 Win32 API，比 TopMost 更可靠）
+        /// </summary>
+        private void EnsureWindowTopMost(IntPtr hWnd)
+        {
+            try
+            {
+                if (hWnd != IntPtr.Zero && IsWindow(hWnd))
+                {
+                    SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 确保 Word 窗口保持激活状态
+        /// </summary>
+        private void EnsureWordWindowActive()
+        {
+            try
+            {
+                if (_application != null && _application.ActiveWindow != null)
+                {
+                    _application.ActiveWindow.Activate();
+                }
+            }
+            catch { }
         }
 
         #endregion

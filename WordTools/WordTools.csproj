@@ -65,22 +65,7 @@
       <EmbedInteropTypes>true</EmbedInteropTypes>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Microsoft.Office.Tools">
-      <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Common\Microsoft.Office.Tools.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.Office.Tools.Common">
-      <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Common\Microsoft.Office.Tools.Common.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.Office.Tools.Word">
-      <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Common\Microsoft.Office.Tools.Word.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Tools.Applications.Runtime">
-      <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Common\Microsoft.VisualStudio.Tools.Applications.Runtime.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+
     <Reference Include="Office">
       <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Office15\Office.dll</HintPath>
       <EmbedInteropTypes>true</EmbedInteropTypes>
@@ -104,12 +89,7 @@
       <DependentUpon>ThisAddIn.cs</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Ribbon.cs">
-      <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="Ribbon.Designer.cs">
-      <DependentUpon>Ribbon.cs</DependentUpon>
-    </Compile>
+
     <Compile Include="Services\ConfigService.cs" />
     <Compile Include="Services\FileService.cs" />
     <Compile Include="Services\ImageService.cs" />
@@ -119,14 +99,12 @@
     <Compile Include="Services\EDF_TemplateDetector.cs" />
     <Compile Include="Forms\InsertPhotosForm.cs" />
     <Compile Include="Forms\ExcelDataFillerForm.cs" />
+    <Compile Include="Forms\ProgressForm.cs" />
     <Compile Include="Theme.cs" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Ribbon.resx">
-      <DependentUpon>Ribbon.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Ribbon.xml" />
   </ItemGroup>
   <ItemGroup>

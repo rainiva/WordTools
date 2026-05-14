@@ -101,13 +101,27 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [4/4] 复制部署文件...
+echo [4/5] 复制部署文件...
 if not exist "WordTools\bin\Release\publish" mkdir "WordTools\bin\Release\publish"
 copy "WordTools\bin\Release\WordTools.dll" "WordTools\bin\Release\publish\" >nul
 copy "WordTools\bin\Release\WordTools.pdb" "WordTools\bin\Release\publish\" >nul
 copy "WordTools\bin\Release\WordTools.dll.manifest" "WordTools\bin\Release\publish\" >nul
 copy "WordTools\WordTools.vsto" "WordTools\bin\Release\publish\" >nul
 echo 部署文件已复制到 publish 目录
+
+echo.
+echo [5/5] NGen 预编译...
+set NGEN_PATH=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\ngen.exe
+if exist "%NGEN_PATH%" (
+    "%NGEN_PATH%" install "WordTools\bin\Release\WordTools.dll"
+    if %errorlevel% equ 0 (
+        echo NGen 预编译完成
+    ) else (
+        echo 警告: NGen 预编译失败，插件仍可正常工作但冷启动可能较慢
+    )
+) else (
+    echo 警告: 找不到 ngen.exe，跳过预编译
+)
 
 echo.
 echo ==========================================
