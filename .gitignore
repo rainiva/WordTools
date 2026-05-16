@@ -37,3 +37,6 @@ Desktop.ini
 ## ClickOnce / VSTO 部署
 *.application
 *.deploy
+
+## Qoder IDE
+.qoder/
