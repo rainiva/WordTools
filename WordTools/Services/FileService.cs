@@ -104,6 +104,87 @@ namespace WordTools.Services
             return !string.IsNullOrEmpty(filePath) && File.Exists(filePath);
         }
 
+        /// <summary>
+        /// 验证图片文件是否可正常读取（存在、非零字节、有读取权限）
+        /// 注意：此方法仅做轻量级检查（FileInfo），不做文件头读取以避免磁盘IO
+        /// </summary>
+        /// <param name="filePath">文件路径</param>
+        /// <param name="errorMessage">错误信息输出</param>
+        /// <returns>True 如果文件有效</returns>
+        public static bool ValidateImageFile(string filePath, out string errorMessage)
+        {
+            errorMessage = null;
+
+            if (string.IsNullOrEmpty(filePath))
+            {
+                errorMessage = "文件路径为空";
+                return false;
+            }
+
+            if (!File.Exists(filePath))
+            {
+                errorMessage = "文件不存在";
+                return false;
+            }
+
+            try
+            {
+                var fi = new FileInfo(filePath);
+                if (fi.Length == 0)
+                {
+                    errorMessage = "文件大小为0字节";
+                    return false;
+                }
+                if (fi.Length > 100 * 1024 * 1024)
+                {
+                    errorMessage = "文件超过100MB，无法插入";
+                    return false;
+                }
+
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                errorMessage = "没有文件读取权限";
+                return false;
+            }
+            catch (IOException ex)
+            {
+                errorMessage = "文件被占用: " + ex.Message;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "文件验证失败: " + ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 批量预检图片文件（在循环外调用，避免重复磁盘IO）
+        /// </summary>
+        /// <param name="filePaths">文件路径数组</param>
+        /// <returns>有效的文件路径列表</returns>
+        public static List<string> BatchValidateImageFiles(string[] filePaths, List<(string fileName, string errorReason)> failedFiles)
+        {
+            var validFiles = new List<string>();
+            if (filePaths == null) return validFiles;
+
+            foreach (var path in filePaths)
+            {
+                string errorMsg;
+                if (ValidateImageFile(path, out errorMsg))
+                {
+                    validFiles.Add(path);
+                }
+                else
+                {
+                    failedFiles?.Add((GetFileName(path), errorMsg));
+                }
+            }
+            return validFiles;
+        }
+
         #endregion
 
         #region 文件列表获取

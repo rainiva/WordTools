@@ -46,14 +46,45 @@ namespace WordTools.Services
         /// </summary>
         public static bool IsCellSuitableForImage(Cell targetCell)
         {
-            if (targetCell == null) return false;
+            return ImageRowPlanner.CanHostSingleImage(GetCellAvailability(targetCell, null));
+        }
+
+        public static ImageCellAvailability GetCellAvailability(Cell targetCell)
+        {
+            return GetCellAvailability(targetCell, null);
+        }
+
+        public static ImageCellAvailability GetCellAvailability(Cell targetCell, ImageInsertionBatchContext context)
+        {
+            if (targetCell == null) return ImageCellAvailability.Blocked;
+
+            Stopwatch availabilityWatch = Stopwatch.StartNew();
 
             try
             {
-                // 检查是否已有图片
+                // 检查合并单元格（合并单元格的索引访问可能异常）
+                try
+                {
+                    int rowIdx = targetCell.RowIndex;
+                    int colIdx = targetCell.ColumnIndex;
+                    if (rowIdx < 1 || colIdx < 1)
+                        return ImageCellAvailability.Blocked;
+                }
+                catch
+                {
+                    // 合并单元格通常无法正确获取索引
+                    return ImageCellAvailability.Blocked;
+                }
+
+                // 检查是否已有内联图片
                 if (targetCell.Range.InlineShapes.Count > 0)
                 {
-                    return false;
+                    return ImageCellAvailability.OverwriteImage;
+                }
+
+                if (HasFloatingShapeInCell(targetCell, context))
+                {
+                    return ImageCellAvailability.OverwriteImage;
                 }
 
                 // 检查单元格是否包含编号（SEQ域或纯文本格式）
@@ -84,9 +115,9 @@ namespace WordTools.Services
                     catch
                     {
                         // 清除失败则不适合插入
-                        return false;
+                        return ImageCellAvailability.Blocked;
                     }
-                    return true;
+                    return ImageCellAvailability.Available;
                 }
 
                 // 获取单元格文本并清理
@@ -95,7 +126,7 @@ namespace WordTools.Services
                 // 空单元格适合插入
                 if (string.IsNullOrEmpty(cellText))
                 {
-                    return true;
+                    return ImageCellAvailability.Available;
                 }
 
                 // 检查是否为文本编号格式（如 "1.", "2." 等）
@@ -110,16 +141,24 @@ namespace WordTools.Services
                     catch
                     {
                         // 清除失败则不适合插入
-                        return false;
+                        return ImageCellAvailability.Blocked;
                     }
-                    return true;
+                    return ImageCellAvailability.Available;
                 }
 
-                return true;
+                return ImageCellAvailability.OverwriteText;
             }
             catch
             {
-                return true;
+                return ImageCellAvailability.Blocked;
+            }
+            finally
+            {
+                availabilityWatch.Stop();
+                if (context != null)
+                {
+                    context.Diagnostics.RecordCellAvailabilityCheck(availabilityWatch.ElapsedMilliseconds);
+                }
             }
         }
 
@@ -142,12 +181,26 @@ namespace WordTools.Services
                 {
                     EnsureRowExists(tbl, row);
 
-                    // 检查第1列
-                    bool col1Suitable = IsCellSuitableForImage(tbl.Cell(row, 1));
-                    
+                    // 检查列数是否足够（防止列数中途变化）
+                    if (tbl.Columns.Count < 1)
+                        continue;
+
+                    // 检查第1列（带合并单元格保护）
+                    bool col1Suitable = false;
+                    try
+                    {
+                        col1Suitable = IsCellSuitableForImage(tbl.Cell(row, 1));
+                    }
+                    catch
+                    {
+                        // 合并单元格或索引越界时跳过
+                        col1Suitable = false;
+                    }
+
                     // 如果第1列不适合，跳过整行
                     if (!col1Suitable) continue;
 
+                    // 检查列数是否足够访问第2列
                     bool col2Suitable = false;
                     if (tbl.Columns.Count >= 2)
                     {
@@ -204,9 +257,293 @@ namespace WordTools.Services
             return false;
         }
 
+        private static bool HasFloatingShapeInCell(Cell targetCell, ImageInsertionBatchContext context)
+        {
+            Stopwatch lookupWatch = Stopwatch.StartNew();
+            try
+            {
+                Range cellRange = targetCell.Range;
+                FloatingShapeIndex index = context != null
+                    ? context.GetOrCreateFloatingShapeIndex(() => BuildFloatingShapeIndex(cellRange.Document.Shapes))
+                    : BuildFloatingShapeIndex(cellRange.Document.Shapes);
+
+                return index.HasShapeInRange(cellRange.Start, cellRange.End);
+            }
+            catch
+            {
+            }
+            finally
+            {
+                lookupWatch.Stop();
+                if (context != null)
+                {
+                    context.Diagnostics.RecordFloatingShapeLookup(lookupWatch.ElapsedMilliseconds);
+                }
+            }
+
+            return false;
+        }
+
+        private static FloatingShapeIndex BuildFloatingShapeIndex(Shapes shapes)
+        {
+            var anchors = new List<FloatingShapeAnchor>();
+            if (shapes == null)
+            {
+                return FloatingShapeIndex.Create(anchors);
+            }
+
+            for (int i = 1; i <= shapes.Count; i++)
+            {
+                try
+                {
+                    var shape = shapes[i];
+                    if (shape != null && shape.Anchor != null)
+                    {
+                        anchors.Add(new FloatingShapeAnchor(shape.Anchor.Start, shape.Anchor.End));
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return FloatingShapeIndex.Create(anchors);
+        }
+
+        #endregion
+
+        #region 合并单元格检测
+
+        /// <summary>
+        /// 检测指定坐标是否落在合并单元格区域内
+        /// 原理：Word COM 中，合并区域内部任意位置调用 tbl.Cell() 都会返回左上角同一个 Cell 对象
+        /// </summary>
+        public static bool IsMergedCell(Table tbl, int row, int col, out int mergeTopRow, out int mergeLeftCol)
+        {
+            mergeTopRow = row;
+            mergeLeftCol = col;
+            if (tbl == null || row < 1 || col < 1) return false;
+
+            try
+            {
+                Cell cell = tbl.Cell(row, col);
+                int actualRow = cell.RowIndex;
+                int actualCol = cell.ColumnIndex;
+
+                // 如果返回的坐标与请求坐标不一致，说明落在合并区域内
+                if (actualRow != row || actualCol != col)
+                {
+                    mergeTopRow = actualRow;
+                    mergeLeftCol = actualCol;
+                    return true;
+                }
+
+                // 额外检测：横向合并（通过 Cells.Count）
+                if (tbl.Rows.Count >= row && tbl.Columns.Count > 1)
+                {
+                    if (ShouldTreatCellCountMismatchAsMerged(col, tbl.Rows[row].Cells.Count, tbl.Columns.Count))
+                    {
+                        mergeTopRow = row;
+                        mergeLeftCol = col;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                mergeTopRow = row;
+                mergeLeftCol = col;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// 获取合并单元格占用的总行数（纵向跨度）
+        /// </summary>
+        public static int GetMergedRowSpan(Table tbl, int topRow, int leftCol)
+        {
+            try
+            {
+                int span = 1;
+                while (topRow + span <= tbl.Rows.Count)
+                {
+                    Cell nextCell = tbl.Cell(topRow + span, leftCol);
+                    if (nextCell.RowIndex == topRow && nextCell.ColumnIndex == leftCol)
+                        span++;
+                    else
+                        break;
+                }
+                return span;
+            }
+            catch
+            {
+                return 1;
+            }
+        }
+
+        public static ImageCellAvailability GetCellAvailability(Table tbl, int row, int col)
+        {
+            return GetCellAvailability(tbl, row, col, null);
+        }
+
+        public static ImageCellAvailability GetCellAvailability(Table tbl, int row, int col, ImageInsertionBatchContext context)
+        {
+            if (tbl == null || row < 1 || col < 1)
+            {
+                return ImageCellAvailability.Blocked;
+            }
+
+            if (context != null && context.TryGetCachedRowAvailability(row, out var cachedRow))
+            {
+                return col == 1 ? cachedRow.LeftCell : cachedRow.RightCell;
+            }
+
+            try
+            {
+                ImageRowAvailability rowAvailability = GetImageRowAvailability(tbl, row, context);
+                return col == 1 ? rowAvailability.LeftCell : rowAvailability.RightCell;
+            }
+            catch
+            {
+                return ImageCellAvailability.Blocked;
+            }
+        }
+
+        public static ImageRowAvailability GetImageRowAvailability(Table tbl, int row)
+        {
+            return GetImageRowAvailability(tbl, row, null);
+        }
+
+        public static ImageRowAvailability GetImageRowAvailability(Table tbl, int row, ImageInsertionBatchContext context)
+        {
+            if (context != null && context.TryGetCachedRowAvailability(row, out var cachedRow))
+            {
+                return cachedRow;
+            }
+
+            ImageRowAvailability rowAvailability = new ImageRowAvailability(
+                row,
+                GetCellAvailabilityCore(tbl, row, 1, context),
+                GetCellAvailabilityCore(tbl, row, 2, context));
+
+            if (context != null)
+            {
+                context.CacheRowAvailability(rowAvailability);
+            }
+
+            return rowAvailability;
+        }
+
+        public static bool FindNextSuitableImageRow(Table tbl, int startRow, out int foundRow, List<int> mergedCellRows = null)
+        {
+            return FindNextSuitableImageRow(tbl, startRow, out foundRow, mergedCellRows, null);
+        }
+
+        public static bool FindNextSuitableImageRow(Table tbl, int startRow, out int foundRow, List<int> mergedCellRows, ImageInsertionBatchContext context)
+        {
+            foundRow = startRow;
+
+            if (tbl == null)
+            {
+                return false;
+            }
+
+            var currentRow = GetImageRowAvailability(tbl, startRow, context);
+            if (currentRow.HasMergedCell)
+            {
+                AddMergedRow(mergedCellRows, currentRow.RowIndex);
+            }
+
+            int maxRow = GetImageRowSearchEndRow(startRow, tbl.Rows.Count);
+            int preferredRow = ImageRowPlanner.FindPreferredPairRow(
+                currentRow,
+                EnumerateFallbackRows(tbl, startRow + 1, maxRow, mergedCellRows, context),
+                -1);
+
+            if (preferredRow < 0)
+            {
+                return false;
+            }
+
+            foundRow = preferredRow;
+            return true;
+        }
+
         #endregion
 
         #region 表格操作
+
+        private static void AddMergedRow(List<int> mergedCellRows, int rowIndex)
+        {
+            if (mergedCellRows == null || rowIndex < 1)
+            {
+                return;
+            }
+
+            if (!mergedCellRows.Contains(rowIndex))
+            {
+                mergedCellRows.Add(rowIndex);
+            }
+        }
+
+        public static bool ShouldTreatCellCountMismatchAsMerged(int requestedColumn, int visibleCellCount, int totalColumnCount)
+        {
+            return requestedColumn > visibleCellCount && visibleCellCount < totalColumnCount;
+        }
+
+        public static int GetImageRowSearchEndRow(int startRow, int lastExistingRow)
+        {
+            return lastExistingRow > startRow ? lastExistingRow : startRow;
+        }
+
+        private static IEnumerable<ImageRowAvailability> EnumerateFallbackRows(
+            Table tbl,
+            int startRow,
+            int endRow,
+            List<int> mergedCellRows,
+            ImageInsertionBatchContext context)
+        {
+            for (int row = startRow; row <= endRow; row++)
+            {
+                EnsureRowExists(tbl, row);
+
+                var rowState = GetImageRowAvailability(tbl, row, context);
+                if (rowState.HasMergedCell)
+                {
+                    AddMergedRow(mergedCellRows, rowState.RowIndex);
+                }
+
+                yield return rowState;
+            }
+        }
+
+        private static ImageCellAvailability GetCellAvailabilityCore(Table tbl, int row, int col, ImageInsertionBatchContext context)
+        {
+            EnsureRowExists(tbl, row);
+
+            if (tbl.Columns.Count < col)
+            {
+                return ImageCellAvailability.Blocked;
+            }
+
+            int mergeTopRow;
+            int mergeLeftCol;
+            if (IsMergedCell(tbl, row, col, out mergeTopRow, out mergeLeftCol))
+            {
+                return ImageCellAvailability.Merged;
+            }
+
+            try
+            {
+                return GetCellAvailability(tbl.Cell(row, col), context);
+            }
+            catch
+            {
+                return ImageCellAvailability.Merged;
+            }
+        }
 
         /// <summary>
         /// 确保表格行存在（轻量版，不调用 AdjustTableColumns）

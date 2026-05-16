@@ -21,6 +21,8 @@ namespace WordTools.Services
         private const string CONFIG_KEY_AUTO_NUMBERING = "AutoNumbering";
         private const string CONFIG_KEY_NUMBER_ALIGNMENT = "NumberAlignment";
         private const string CONFIG_KEY_NUMBER_POSITION = "NumberPosition";
+        private const string CONFIG_KEY_ENABLE_DETAILED_LOGGING = "EnableDetailedLogging";
+        private const string CONFIG_KEY_ENABLE_BENCHMARK_LOGGING = "EnableBenchmarkLogging";
 
         // 注册表路径
         private const string REGISTRY_PATH = @"Software\WordTools";
@@ -507,6 +509,33 @@ namespace WordTools.Services
             var strValue = value ? "True" : "False";
             if (doc != null) SetDocumentProperty(doc, CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE, strValue);
             SetRegistryValue(CONFIG_KEY_EDF_REPLACE_SAMPLE_SIZE, strValue);
+        }
+
+        /// <summary>
+        /// 获取是否启用基准日志（开发调试开关，仅注册表）
+        /// </summary>
+        public static bool GetDetailedLoggingEnabled()
+        {
+            var value = GetRegistryValue(CONFIG_KEY_ENABLE_DETAILED_LOGGING, "False");
+            return string.Equals(value, "True", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static void SaveDetailedLoggingEnabled(bool value)
+        {
+            SetRegistryValue(CONFIG_KEY_ENABLE_DETAILED_LOGGING, value ? "True" : "False");
+        }
+
+        public static bool GetBenchmarkLoggingEnabled()
+        {
+            var value = GetRegistryValue(CONFIG_KEY_ENABLE_BENCHMARK_LOGGING, "False");
+            return string.Equals(value, "True", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static void SaveBenchmarkLoggingEnabled(bool value)
+        {
+            SetRegistryValue(CONFIG_KEY_ENABLE_BENCHMARK_LOGGING, value ? "True" : "False");
         }
 
         #endregion

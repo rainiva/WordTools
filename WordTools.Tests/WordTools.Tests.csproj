@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\WordTools\Forms\FailureDetailsForm.cs" Link="Forms\FailureDetailsForm.cs" />
+    <Compile Include="..\WordTools\Services\BenchmarkLogService.cs" Link="Services\BenchmarkLogService.cs" />
+    <Compile Include="..\WordTools\Services\ImageInsertionBatchContext.cs" Link="Services\ImageInsertionBatchContext.cs" />
+    <Compile Include="..\WordTools\Services\ImageRowPlanner.cs" Link="Services\ImageRowPlanner.cs" />
+    <Compile Include="..\WordTools\Services\InsertionPerformanceDiagnostics.cs" Link="Services\InsertionPerformanceDiagnostics.cs" />
+    <Compile Include="..\WordTools\Services\InsertionSummaryFormatter.cs" Link="Services\InsertionSummaryFormatter.cs" />
+    <Compile Include="..\WordTools\Services\LoggingOptionsStateController.cs" Link="Services\LoggingOptionsStateController.cs" />
+    <Compile Include="..\WordTools\Services\ProgressFormStateController.cs" Link="Services\ProgressFormStateController.cs" />
+  </ItemGroup>
+</Project>

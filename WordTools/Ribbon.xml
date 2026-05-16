@@ -2,59 +2,69 @@
 <customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="Ribbon_Load">
   <ribbon>
     <tabs>
-      <!-- Word工具箱选项卡，紧跟在"开始"选项卡之后 -->
       <tab id="tabWordToolbox" label="Word工具箱" insertAfterMso="TabHome">
-        
-        <!-- 主功能组 -->
         <group id="grpMainFunctions" label="图片工具">
-          
-          <!-- 批量插图按钮（普通按钮，点击弹出窗体） -->
           <button id="btnInsertPhotos"
                   label="批量插图"
                   screentip="批量插入图片到表格"
-                  supertip="打开批量插图工具窗口，从文件夹或选择的图片文件批量插入到Word表格中，支持自动编号和描述行。"
+                  supertip="打开批量插图工具窗口，从文件夹或选中的图片文件批量插入到 Word 表格中，支持自动编号和描述行。"
                   size="large"
                   imageMso="PictureInsertFromFile"
                   onAction="OnInsertPhotosClick"/>
-          
-          <!-- 刷新编号按钮 -->
+
           <button id="btnRefreshNumbering"
                   label="刷新编号"
                   screentip="刷新表格编号"
-                  supertip="扫描当前光标所在的表格，为所有描述行重新添加编号。适用于手动增删图片后修复编号。"
+                  supertip="扫描当前光标所在的表格，为所有描述行重新添加编号，适用于手动增删图片后的编号修复。"
                   size="large"
                   imageMso="NumberInsert"
                   onAction="OnRefreshNumberingClick"/>
-          
         </group>
-        
-        <!-- 工具组 -->
+
         <group id="grpTools" label="工具">
-          
-          <!-- Excel数据填充按钮 -->
           <button id="btnExcelDataFiller"
                   label="Excel数据填充"
-                  screentip="Excel数据批量填充到Word表格"
-                  supertip="从Excel文件读取数据，智能识别Word表格结构，自动匹配并填充数据到表格中。支持多种表格模板和Sample Size替换。"
+                  screentip="Excel 数据批量填充到 Word 表格"
+                  supertip="从 Excel 文件读取数据，智能识别 Word 表格结构并自动填充到表格中。"
                   size="large"
                   imageMso="TableExcelSpreadsheetInsert"
                   onAction="OnExcelDataFillerClick"/>
-          
         </group>
-        
-        <!-- 帮助组 -->
+
+        <group id="grpDebug" label="调试与日志">
+          <menu id="menuLoggingSettings"
+                label="日志设置"
+                screentip="查看或调整日志选项"
+                supertip="集中管理详细日志和性能基准 CSV 输出，适合开发和排查问题时使用。"
+                size="large"
+                imageMso="FileProperties"
+                itemSize="normal">
+            <checkBox id="chkDetailedLogging"
+                      label="启用详细日志"
+                      screentip="显示诊断耗时信息"
+                      supertip="开启后，插图结果摘要里会显示诊断耗时和分段信息。"
+                      getPressed="GetDetailedLoggingPressed"
+                      onAction="OnToggleDetailedLogging"/>
+
+            <checkBox id="chkBenchmarkLogging"
+                      label="输出性能基准 CSV"
+                      screentip="追加写入性能基准日志"
+                      supertip="开启后，会在详细日志启用的前提下，把每次插图的基准数据追加写入 CSV。"
+                      getPressed="GetBenchmarkLoggingPressed"
+                      getEnabled="GetBenchmarkLoggingEnabled"
+                      onAction="OnToggleBenchmarkLogging"/>
+          </menu>
+        </group>
+
         <group id="grpHelp" label="帮助">
-          
           <button id="btnAbout"
                   label="关于"
-                  screentip="关于Word工具箱"
+                  screentip="关于 Word 工具箱"
                   supertip="显示版本信息和使用说明。"
                   size="large"
                   imageMso="Info"
                   onAction="OnAboutClick"/>
-          
         </group>
-        
       </tab>
     </tabs>
   </ribbon>

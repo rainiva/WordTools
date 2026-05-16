@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Word;
 
@@ -12,6 +14,15 @@ namespace WordTools.Services
     {
         // 厘米到磅的转换系数
         private const float CM_TO_POINTS = 28.35f;
+
+        // 最小可接受行高（磅），低于此值视为异常单行
+        private const float MIN_ACCEPTABLE_ROW_HEIGHT = 10f;
+
+        // COM 调用重试次数
+        private const int COM_RETRY_COUNT = 3;
+
+        // COM 调用重试间隔（毫秒）
+        private const int COM_RETRY_DELAY_MS = 200;
 
         #region 尺寸转换
 
@@ -62,6 +73,341 @@ namespace WordTools.Services
 
         #endregion
 
+        #region 单元格验证
+
+        /// <summary>
+        /// 验证单元格是否适合插入图片（增强版）
+        /// 检查：合并单元格、行高异常、浮动图片、文件有效性
+        /// </summary>
+        public static bool ValidateCellForImage(Cell targetCell, string imagePath, out string errorMessage)
+        {
+            return ValidateCellForImage(targetCell, imagePath, out errorMessage, null);
+        }
+
+        public static bool ValidateCellForImage(Cell targetCell, string imagePath, out string errorMessage, ImageInsertionBatchContext context)
+        {
+            errorMessage = null;
+            var validationWatch = context != null
+                ? System.Diagnostics.Stopwatch.StartNew()
+                : null;
+
+            if (targetCell == null)
+            {
+                errorMessage = "目标单元格为空";
+                return false;
+            }
+
+            try
+            {
+                // 1. 检查文件有效性
+                if (!FileService.ValidateImageFile(imagePath, out errorMessage))
+                {
+                    return false;
+                }
+
+                // 2. 检查合并单元格（合并单元格的 Cell 对象行为异常）
+                try
+                {
+                    // 尝试访问 RowIndex 和 ColumnIndex，合并单元格可能抛出异常或返回异常值
+                    int rowIdx = targetCell.RowIndex;
+                    int colIdx = targetCell.ColumnIndex;
+                    if (rowIdx < 1 || colIdx < 1)
+                    {
+                        errorMessage = "单元格索引异常（可能是合并单元格）";
+                        return false;
+                    }
+                }
+                catch (COMException)
+                {
+                    errorMessage = "无法访问单元格（可能是合并单元格）";
+                    return false;
+                }
+
+                // 3. 检查行高是否异常（单行压缩）
+                try
+                {
+                    float rowHeight = targetCell.Height;
+                    if (rowHeight > 0 && rowHeight < MIN_ACCEPTABLE_ROW_HEIGHT)
+                    {
+                        errorMessage = string.Format("表格行高异常（{0:F1}磅），请调整行高后再插入", rowHeight);
+                        return false;
+                    }
+                }
+                catch
+                {
+                    // 行高读取失败不阻断，继续其他检查
+                }
+
+                // 4. 检查单元格宽度是否异常
+                try
+                {
+                    float cellWidth = targetCell.Width;
+                    if (cellWidth > 0 && cellWidth < 5)
+                    {
+                        errorMessage = string.Format("单元格宽度异常（{0:F1}磅），请调整列宽后再插入", cellWidth);
+                        return false;
+                    }
+                }
+                catch
+                {
+                    // 宽度读取失败不阻断
+                }
+
+                return true;
+            }
+            catch (COMException ex)
+            {
+                errorMessage = "COM 错误: " + ex.Message;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "单元格验证失败: " + ex.Message;
+                return false;
+            }
+            finally
+            {
+                if (validationWatch != null)
+                {
+                    validationWatch.Stop();
+                    context.Diagnostics.RecordCellValidation(validationWatch.ElapsedMilliseconds);
+                }
+            }
+        }
+
+        #endregion
+
+        #region COM 重试
+
+        /// <summary>
+        /// 带重试机制的 AddPicture 调用
+        /// 处理 Word COM 繁忙时的 RPC_E_SERVERCALL_RETRYLATER 错误
+        /// </summary>
+        private static InlineShape TryAddPictureWithRetry(Range targetRange, string imagePath, out string errorMessage)
+        {
+            errorMessage = null;
+            InlineShape shape = null;
+
+            for (int attempt = 1; attempt <= COM_RETRY_COUNT; attempt++)
+            {
+                try
+                {
+                    shape = targetRange.InlineShapes.AddPicture(
+                        FileName: imagePath,
+                        LinkToFile: false,
+                        SaveWithDocument: true);
+
+                    // 验证插入后的尺寸是否有效
+                    if (shape.Width <= 0 || shape.Height <= 0)
+                    {
+                        errorMessage = "图片尺寸异常（Width=" + shape.Width + ", Height=" + shape.Height + "）";
+                        try { shape.Delete(); } catch { }
+                        return null;
+                    }
+
+                    return shape;
+                }
+                catch (COMException ex) when (ex.HResult == unchecked((int)0x80010001) ||  // RPC_E_CALL_REJECTED
+                                               ex.HResult == unchecked((int)0x8001010A) ||  // RPC_E_SERVERCALL_RETRYLATER
+                                               ex.Message.IndexOf("rejected", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                               ex.Message.IndexOf("retry", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                               ex.Message.IndexOf("忙", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                               ex.Message.IndexOf("busy", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    errorMessage = "Word 正忙，无法插入图片";
+                    if (attempt < COM_RETRY_COUNT)
+                    {
+                        System.Threading.Thread.Sleep(COM_RETRY_DELAY_MS * attempt);
+                        System.Windows.Forms.Application.DoEvents();
+                    }
+                }
+                catch (COMException ex)
+                {
+                    errorMessage = "COM 错误: " + ex.Message;
+                    break;
+                }
+                catch (FileNotFoundException)
+                {
+                    errorMessage = "图片文件未找到";
+                    break;
+                }
+                catch (IOException ex)
+                {
+                    errorMessage = "文件访问错误: " + ex.Message;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = "插入异常: " + ex.Message;
+                    break;
+                }
+            }
+
+            return null;
+        }
+
+        private static void ClearCellContentForOverwrite(Cell targetCell)
+        {
+            if (targetCell == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Range cellRange = targetCell.Range;
+                for (int i = cellRange.InlineShapes.Count; i >= 1; i--)
+                {
+                    try
+                    {
+                        cellRange.InlineShapes[i].Delete();
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                try
+                {
+                    var shapes = cellRange.Document.Shapes;
+                    for (int i = shapes.Count; i >= 1; i--)
+                    {
+                        try
+                        {
+                            var shape = shapes[i];
+                            if (shape != null && shape.Anchor != null &&
+                                IsShapeAnchorWithinCell(shape.Anchor.Start, shape.Anchor.End, cellRange.Start, cellRange.End))
+                            {
+                                shape.Delete();
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+            catch
+            {
+            }
+
+            targetCell.Range.Text = "";
+        }
+
+        private static void ClearCellContentForOverwrite(Cell targetCell, ImageInsertionBatchContext context)
+        {
+            if (context == null)
+            {
+                ClearCellContentForOverwrite(targetCell);
+                return;
+            }
+
+            var clearWatch = System.Diagnostics.Stopwatch.StartNew();
+
+            try
+            {
+                if (targetCell == null)
+                {
+                    return;
+                }
+
+                Range cellRange = targetCell.Range;
+                for (int i = cellRange.InlineShapes.Count; i >= 1; i--)
+                {
+                    try
+                    {
+                        cellRange.InlineShapes[i].Delete();
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                bool shouldScanFloatingShapes = true;
+                try
+                {
+                    FloatingShapeIndex index = context.GetOrCreateFloatingShapeIndex(
+                        () => FloatingShapeIndex.Create(CollectFloatingShapeAnchors(cellRange.Document.Shapes)));
+                    shouldScanFloatingShapes = index.HasShapeInRange(cellRange.Start, cellRange.End);
+                }
+                catch
+                {
+                    shouldScanFloatingShapes = true;
+                }
+
+                if (shouldScanFloatingShapes)
+                {
+                    try
+                    {
+                        var shapes = cellRange.Document.Shapes;
+                        for (int i = shapes.Count; i >= 1; i--)
+                        {
+                            try
+                            {
+                                var shape = shapes[i];
+                                if (shape != null && shape.Anchor != null &&
+                                    IsShapeAnchorWithinCell(shape.Anchor.Start, shape.Anchor.End, cellRange.Start, cellRange.End))
+                                {
+                                    shape.Delete();
+                                }
+                            }
+                            catch
+                            {
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                targetCell.Range.Text = "";
+            }
+            finally
+            {
+                clearWatch.Stop();
+                context.Diagnostics.RecordOverwriteClear(clearWatch.ElapsedMilliseconds);
+                context.InvalidateFloatingShapeIndex();
+            }
+        }
+
+        private static List<FloatingShapeAnchor> CollectFloatingShapeAnchors(Shapes shapes)
+        {
+            var anchors = new List<FloatingShapeAnchor>();
+            if (shapes == null)
+            {
+                return anchors;
+            }
+
+            for (int i = 1; i <= shapes.Count; i++)
+            {
+                Shape shape = null;
+                try
+                {
+                    shape = shapes[i];
+                    if (shape != null && shape.Anchor != null)
+                    {
+                        anchors.Add(new FloatingShapeAnchor(shape.Anchor.Start, shape.Anchor.End));
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return anchors;
+        }
+
+        public static bool IsShapeAnchorWithinCell(int anchorStart, int anchorEnd, int cellStart, int cellEnd)
+        {
+            return anchorStart >= cellStart && anchorEnd <= cellEnd;
+        }
+
+        #endregion
+
         #region 图片插入
 
         /// <summary>
@@ -69,12 +415,18 @@ namespace WordTools.Services
         /// </summary>
         /// <param name="targetCell">目标单元格</param>
         /// <param name="imagePath">图片文件路径</param>
+        /// <param name="errorMessage">错误信息输出</param>
         /// <param name="minHeightPoints">最小高度（磅），-1 表示不限制</param>
         /// <returns>插入的图片对象</returns>
-        public static InlineShape InsertImageToCell(Cell targetCell, string imagePath, float minHeightPoints = -1)
+        public static InlineShape InsertImageToCell(Cell targetCell, string imagePath, out string errorMessage, float minHeightPoints = -1)
         {
-            if (targetCell == null || string.IsNullOrEmpty(imagePath))
+            errorMessage = null;
+
+            // 增强验证
+            if (!ValidateCellForImage(targetCell, imagePath, out errorMessage))
+            {
                 return null;
+            }
 
             try
             {
@@ -86,14 +438,16 @@ namespace WordTools.Services
                 float targetWidth = cellWidth - 6; // 减去左右边距各3磅
                 float targetHeight = cellHeight - 6; // 减去上下边距各3磅
 
-                if (targetWidth < 10) targetWidth = cellWidth;
-                if (targetHeight < 10) targetHeight = cellHeight;
+                // 尺寸异常时使用安全值
+                if (targetWidth < 1) targetWidth = 1;
+                if (targetHeight < 1) targetHeight = 1;
 
-                // 插入图片到单元格范围
-                var p = targetCell.Range.InlineShapes.AddPicture(
-                    FileName: imagePath,
-                    LinkToFile: false,
-                    SaveWithDocument: true);
+                // 插入图片（带重试）
+                var p = TryAddPictureWithRetry(targetCell.Range, imagePath, out errorMessage);
+                if (p == null)
+                {
+                    return null;
+                }
 
                 // msoTrue = -1
                 ((dynamic)p).LockAspectRatio = -1;
@@ -113,23 +467,28 @@ namespace WordTools.Services
                     scaleRatio = targetHeight / p.Height;
                 }
 
-                // 应用缩放
+                // 应用缩放（同时设置 Width 和 Height，不依赖 LockAspectRatio 的自动联动）
                 if (scaleRatio < 1)
                 {
                     p.Width = p.Width * scaleRatio;
                     p.Height = p.Height * scaleRatio;
                 }
 
-                // 如果设置了最小高度且当前高度小于最小高度，调整高度
+                // 如果设置了最小高度且当前高度小于最小高度，安全调整
                 if (minHeightPoints > 0 && p.Height < minHeightPoints)
                 {
+                    float ratio = minHeightPoints / p.Height;
+                    ((dynamic)p).LockAspectRatio = 0;
                     p.Height = minHeightPoints;
+                    p.Width = p.Width * ratio;
+                    ((dynamic)p).LockAspectRatio = -1;
                 }
 
                 return p;
             }
             catch (Exception ex)
             {
+                errorMessage = "插图失败: " + ex.Message;
                 System.Diagnostics.Debug.WriteLine($"InsertImageToCell error: {ex.Message}");
                 return null;
             }
@@ -140,11 +499,23 @@ namespace WordTools.Services
         /// </summary>
         /// <param name="targetCell">目标单元格</param>
         /// <param name="imagePath">图片文件路径</param>
+        /// <param name="errorMessage">错误信息输出</param>
         /// <param name="minHeightPoints">最小高度（磅），-1 表示不限制</param>
-        public static void InsertImageFast(Cell targetCell, string imagePath, float minHeightPoints = -1)
+        /// <returns>是否插入成功</returns>
+        public static bool InsertImageFast(Cell targetCell, string imagePath, out string errorMessage, float minHeightPoints = -1)
         {
-            if (targetCell == null || string.IsNullOrEmpty(imagePath))
-                return;
+            return InsertImageFast(targetCell, imagePath, out errorMessage, minHeightPoints, null);
+        }
+
+        public static bool InsertImageFast(Cell targetCell, string imagePath, out string errorMessage, float minHeightPoints, ImageInsertionBatchContext context)
+        {
+            errorMessage = null;
+
+            // 增强验证
+            if (!ValidateCellForImage(targetCell, imagePath, out errorMessage, context))
+            {
+                return false;
+            }
 
             try
             {
@@ -152,53 +523,95 @@ namespace WordTools.Services
                 float cellWidth = targetCell.Width - 6;
                 float cellHeight = targetCell.Height - 6;
 
-                // 清空单元格现有内容
-                targetCell.Range.Text = "";
+                // 尺寸异常时使用安全值，避免缩放比例计算错误
+                if (cellWidth < 1) cellWidth = 1;
+                if (cellHeight < 1) cellHeight = 1;
 
-                // 插入图片（使用 LinkToFile=true 可减少内存占用，但图片不会嵌入文档）
-                // 这里仍使用 SaveWithDocument=true 确保文档可移植
-                var p = targetCell.Range.InlineShapes.AddPicture(
-                    FileName: imagePath,
-                    LinkToFile: false,
-                    SaveWithDocument: true);
-
-                // 设置锁定宽高比（msoTrue = -1）
-                ((dynamic)p).LockAspectRatio = -1;
-
-                // 一次性计算并应用缩放（减少 COM 交互次数）
-                float scaleRatio = 1.0f;
-
-                // 根据宽度限制计算缩放比例
-                if (p.Width > cellWidth)
+                // 最终合并单元格检测（防止绕开逻辑遗漏）
+                try
                 {
-                    scaleRatio = cellWidth / p.Width;
+                    if (targetCell.RowIndex != targetCell.RowIndex || targetCell.ColumnIndex != targetCell.ColumnIndex)
+                    {
+                        errorMessage = "目标单元格为合并单元格，已跳过";
+                        return false;
+                    }
+                }
+                catch { }
+
+                // 清空单元格现有内容，覆盖旧文本/旧图片
+                ClearCellContentForOverwrite(targetCell, context);
+
+                // 插入图片（带重试）
+                var addPictureWatch = System.Diagnostics.Stopwatch.StartNew();
+                var p = TryAddPictureWithRetry(targetCell.Range, imagePath, out errorMessage);
+                addPictureWatch.Stop();
+                if (context != null)
+                {
+                    context.Diagnostics.RecordAddPicture(addPictureWatch.ElapsedMilliseconds);
+                }
+                if (p == null)
+                {
+                    return false;
                 }
 
-                // 根据高度限制调整缩放比例
-                float scaledHeight = p.Height * scaleRatio;
-                if (cellHeight > 10 && scaledHeight > cellHeight)
+                var sizingWatch = context != null
+                    ? System.Diagnostics.Stopwatch.StartNew()
+                    : null;
+                try
                 {
-                    scaleRatio = cellHeight / p.Height;
-                }
+                    // 设置锁定宽高比（msoTrue = -1）
+                    ((dynamic)p).LockAspectRatio = -1;
 
-                // 应用缩放（只设置一次 Width，Height 会自动按比例调整）
-                if (scaleRatio < 1.0f)
-                {
-                    p.Width = p.Width * scaleRatio;
-                }
+                    // 一次性计算并应用缩放（减少 COM 交互次数）
+                    float scaleRatio = 1.0f;
 
-                // 最小高度限制
-                if (minHeightPoints > 0 && p.Height < minHeightPoints)
+                    // 根据宽度限制计算缩放比例
+                    if (p.Width > cellWidth)
+                    {
+                        scaleRatio = cellWidth / p.Width;
+                    }
+
+                    // 根据高度限制调整缩放比例
+                    float scaledHeight = p.Height * scaleRatio;
+                    if (cellHeight > 10 && scaledHeight > cellHeight)
+                    {
+                        scaleRatio = cellHeight / p.Height;
+                    }
+
+                    // 应用缩放（同时设置 Width 和 Height，不依赖 LockAspectRatio 的自动联动）
+                    if (scaleRatio < 1.0f)
+                    {
+                        p.Width = p.Width * scaleRatio;
+                        p.Height = p.Height * scaleRatio;
+                    }
+
+                    // 最小高度限制（安全处理：临时解除锁定，按比例调整宽高）
+                    if (minHeightPoints > 0 && p.Height < minHeightPoints)
+                    {
+                        float ratio = minHeightPoints / p.Height;
+                        ((dynamic)p).LockAspectRatio = 0;
+                        p.Height = minHeightPoints;
+                        p.Width = p.Width * ratio;
+                        ((dynamic)p).LockAspectRatio = -1;
+                    }
+                }
+                finally
                 {
-                    p.Height = minHeightPoints;
+                    if (sizingWatch != null)
+                    {
+                        sizingWatch.Stop();
+                        context.Diagnostics.RecordPictureSizing(sizingWatch.ElapsedMilliseconds);
+                    }
                 }
 
                 // 释放 COM 对象引用
                 Marshal.ReleaseComObject(p);
+                return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // 忽略单个图片插入错误
+                errorMessage = "插图失败: " + ex.Message;
+                return false;
             }
         }
 
@@ -236,14 +649,23 @@ namespace WordTools.Services
                                     ((dynamic)shape).LockAspectRatio = -1;
 
                                     // 调整尺寸
-                                    if (shape.Width > cell.Width - 6)
+                                    float availableWidth = cell.Width - 6;
+                                    if (availableWidth < 1) availableWidth = 1;
+
+                                    if (shape.Width > availableWidth)
                                     {
-                                        shape.Width = cell.Width - 6;
+                                        float ratio = availableWidth / shape.Width;
+                                        shape.Width = availableWidth;
+                                        shape.Height = shape.Height * ratio;
                                     }
 
                                     if (minHeightPoints > 0 && shape.Height < minHeightPoints)
                                     {
+                                        float ratio = minHeightPoints / shape.Height;
+                                        ((dynamic)shape).LockAspectRatio = 0;
                                         shape.Height = minHeightPoints;
+                                        shape.Width = shape.Width * ratio;
+                                        ((dynamic)shape).LockAspectRatio = -1;
                                     }
                                 }
                             }

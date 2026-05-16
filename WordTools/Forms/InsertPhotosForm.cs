@@ -1,26 +1,50 @@
-using System;
+﻿using System;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Word;
 using WordTools.Services;
 using Application = Microsoft.Office.Interop.Word.Application;
+using Button = System.Windows.Forms.Button;
 using CheckBox = System.Windows.Forms.CheckBox;
+using DrawingPoint = System.Drawing.Point;
+using Label = System.Windows.Forms.Label;
 using RadioButton = System.Windows.Forms.RadioButton;
 using TextBox = System.Windows.Forms.TextBox;
-using Button = System.Windows.Forms.Button;
-using Label = System.Windows.Forms.Label;
 using Theme = WordTools.Theme;
 
 namespace WordTools.Forms
 {
+    public enum InsertPhotosRequestMode
+    {
+        Folder,
+        SelectedFiles
+    }
+
+    public sealed class InsertPhotosRequest
+    {
+        public InsertPhotosRequestMode Mode { get; set; }
+        public string FolderPath { get; set; }
+        public string[] SelectedFiles { get; set; }
+        public float MinHeight { get; set; }
+        public bool NeedDescription { get; set; }
+        public bool UseFileNameAsDescription { get; set; }
+        public bool UseFolderNameAsDescription { get; set; }
+        public bool IncludeRootImages { get; set; }
+        public bool IncludeSubFolderImages { get; set; }
+        public bool NeedAutoNumbering { get; set; }
+        public int NumberAlignment { get; set; }
+        public int NumberPosition { get; set; }
+    }
+
     /// <summary>
     /// 批量插图工具主窗体
     /// </summary>
     public partial class InsertPhotosForm : Form
     {
         private readonly Application _application;
-        
-        // 控件
+        public InsertPhotosRequest PendingRequest { get; private set; }
+
         private TextBox txtFolderPath;
         private TextBox txtImageHeight;
         private Button btnBrowseFolder;
@@ -39,15 +63,16 @@ namespace WordTools.Forms
         private RadioButton optAlignLeft;
         private RadioButton optAlignCenter;
 
-        // DPI 缩放
         private float dpiScale;
-        private int S(int value) { return Theme.Scale(value, dpiScale); }
-
-        // 预计算布局常量
         private int MARGIN;
         private int CTRL_HEIGHT;
         private int LINE_SPACING;
         private int FORM_WIDTH;
+
+        private int S(int value)
+        {
+            return Theme.Scale(value, dpiScale);
+        }
 
         public InsertPhotosForm(Application application)
         {
@@ -58,156 +83,126 @@ namespace WordTools.Forms
 
         private void InitializeComponent()
         {
-            this.SuspendLayout();
+            SuspendLayout();
 
-            // 应用 DPI 缩放和窗体默认样式
             dpiScale = Theme.ApplyFormDefaults(this);
-
-            // 预计算布局常量
             MARGIN = S(Theme.Layout.Margin);
             CTRL_HEIGHT = S(Theme.Layout.CtrlHeight);
             LINE_SPACING = S(Theme.Layout.LineSpacing);
             FORM_WIDTH = S(Theme.Layout.FormWidthSmall);
 
-            // 窗体属性
-            this.Text = "批量插图工具";
-            this.ClientSize = new Size(FORM_WIDTH, S(320));
+            Text = "批量插图工具";
+            ClientSize = new Size(FORM_WIDTH, S(400));
 
             int currentTop = MARGIN;
-
-            // 文件夹路径行
             CreateFolderPathRow(ref currentTop);
-
-            // 图片高度和范围行
             CreateHeightAndScopeRow(ref currentTop);
-
-            // 分隔线
             CreateDivider(ref currentTop);
-
-            // 描述选项行
             CreateDescriptionOptionsRow(ref currentTop);
-
-            // 编号位置行
             CreateNumberPositionRow(ref currentTop);
-
-            // 编号对齐行
             CreateAlignmentOptionsRow(ref currentTop);
-
-            // 分隔线
             CreateDivider(ref currentTop);
-
-            // 操作按钮行
             CreateActionButtonsRow(ref currentTop);
 
-            // 调整窗体高度
-            this.ClientSize = new Size(FORM_WIDTH, currentTop + MARGIN);
-
-            this.ResumeLayout(false);
+            ClientSize = new Size(FORM_WIDTH, currentTop + MARGIN);
+            ResumeLayout(false);
         }
 
-        #region 控件创建
+        #region Layout
 
         private void CreateFolderPathRow(ref int topPos)
         {
-            // 标签（高度与输入框一致，文字垂直居中）
             var lblFolder = new Label
             {
                 Text = "文件夹:",
-                Location = new System.Drawing.Point(S(15), topPos),
+                Location = new DrawingPoint(S(15), topPos),
                 Size = new Size(S(55), CTRL_HEIGHT),
                 Font = Theme.Fonts.Bold,
                 ForeColor = Theme.Colors.Text,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            this.Controls.Add(lblFolder);
+            Controls.Add(lblFolder);
 
-            // 文本框（使用单行模式，恢复默认样式）
             txtFolderPath = Theme.CreateTextBox();
-            txtFolderPath.Location = new System.Drawing.Point(S(75), topPos);
+            txtFolderPath.Location = new DrawingPoint(S(75), topPos);
             txtFolderPath.Size = new Size(S(300), CTRL_HEIGHT);
             Theme.CenterTextVertically(txtFolderPath);
-            this.Controls.Add(txtFolderPath);
+            Controls.Add(txtFolderPath);
 
-            // 浏览按钮（高度与文本框自动高度对齐）
             btnBrowseFolder = Theme.CreateButton("浏览...", Theme.ButtonStyle.Default);
-            btnBrowseFolder.Location = new System.Drawing.Point(S(385), topPos);
+            btnBrowseFolder.Location = new DrawingPoint(S(385), topPos);
             btnBrowseFolder.Size = new Size(S(75), CTRL_HEIGHT);
             btnBrowseFolder.Click += BtnBrowseFolder_Click;
-            this.Controls.Add(btnBrowseFolder);
+            Controls.Add(btnBrowseFolder);
 
             topPos += LINE_SPACING;
         }
 
         private void CreateHeightAndScopeRow(ref int topPos)
         {
-            // 高度标签（高度与输入框一致，文字垂直居中）
             var lblHeight = new Label
             {
                 Text = "高度:",
-                Location = new System.Drawing.Point(S(15), topPos),
+                Location = new DrawingPoint(S(15), topPos),
                 Size = new Size(S(42), CTRL_HEIGHT),
                 Font = Theme.Fonts.Bold,
                 ForeColor = Theme.Colors.Text,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            this.Controls.Add(lblHeight);
+            Controls.Add(lblHeight);
 
-            // 高度文本框（使用单行模式，恢复默认样式）
             txtImageHeight = Theme.CreateTextBox(HorizontalAlignment.Center);
-            txtImageHeight.Text = "";
-            txtImageHeight.Location = new System.Drawing.Point(S(75), topPos);
+            txtImageHeight.Location = new DrawingPoint(S(75), topPos);
             txtImageHeight.Size = new Size(S(80), CTRL_HEIGHT);
             txtImageHeight.TextAlign = HorizontalAlignment.Center;
             Theme.CenterTextVertically(txtImageHeight);
-            this.Controls.Add(txtImageHeight);
+            Controls.Add(txtImageHeight);
 
-            // 单位标签（高度与输入框一致，文字垂直居中）
             var lblUnit = new Label
             {
                 Text = "cm",
-                Location = new System.Drawing.Point(S(160), topPos),
+                Location = new DrawingPoint(S(160), topPos),
                 Size = new Size(S(25), CTRL_HEIGHT),
                 Font = Theme.Fonts.Default,
                 ForeColor = Theme.Colors.TextLight,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            this.Controls.Add(lblUnit);
+            Controls.Add(lblUnit);
 
-            // 范围标签（高度与输入框一致，文字垂直居中）
             var lblScope = new Label
             {
                 Text = "范围:",
-                Location = new System.Drawing.Point(S(200), topPos),
+                Location = new DrawingPoint(S(200), topPos),
                 Size = new Size(S(42), CTRL_HEIGHT),
                 Font = Theme.Fonts.Bold,
                 ForeColor = Theme.Colors.Text,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            this.Controls.Add(lblScope);
+            Controls.Add(lblScope);
 
-            // 根目录复选框
             chkIncludeRoot = new CheckBox
             {
                 Text = "根目录",
-                Location = new System.Drawing.Point(S(248), topPos),
+                Location = new DrawingPoint(S(248), topPos),
                 Size = new Size(S(75), CTRL_HEIGHT),
                 Checked = true,
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
-            this.Controls.Add(chkIncludeRoot);
+            Controls.Add(chkIncludeRoot);
 
-            // 子目录复选框
             chkIncludeSubFolder = new CheckBox
             {
                 Text = "子目录",
-                Location = new System.Drawing.Point(S(330), topPos),
+                Location = new DrawingPoint(S(330), topPos),
                 Size = new Size(S(75), CTRL_HEIGHT),
                 Checked = true,
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
-            this.Controls.Add(chkIncludeSubFolder);
+            Controls.Add(chkIncludeSubFolder);
 
             topPos += S(Theme.Layout.CtrlHeight + Theme.Layout.DividerPaddingTop);
         }
@@ -215,79 +210,77 @@ namespace WordTools.Forms
         private void CreateDivider(ref int topPos)
         {
             var divider = Theme.CreateDivider(FORM_WIDTH - MARGIN * 2);
-            divider.Location = new System.Drawing.Point(MARGIN, topPos);
-            this.Controls.Add(divider);
+            divider.Location = new DrawingPoint(MARGIN, topPos);
+            Controls.Add(divider);
             topPos += 1 + S(Theme.Layout.DividerPaddingBottom);
         }
 
         private void CreateDescriptionOptionsRow(ref int topPos)
         {
-            // 描述标签（高度与输入框一致，文字垂直居中）
             var lblDesc = new Label
             {
                 Text = "描述:",
-                Location = new System.Drawing.Point(S(15), topPos),
+                Location = new DrawingPoint(S(15), topPos),
                 Size = new Size(S(42), CTRL_HEIGHT),
                 Font = Theme.Fonts.Bold,
                 ForeColor = Theme.Colors.Text,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            this.Controls.Add(lblDesc);
+            Controls.Add(lblDesc);
 
-            // 用 Panel 包裹描述选项的 RadioButton
             var pnlDescription = new Panel
             {
-                Location = new System.Drawing.Point(S(70), topPos),
+                Location = new DrawingPoint(S(70), topPos),
                 Size = new Size(S(300), CTRL_HEIGHT),
                 BackColor = Theme.Colors.Background
             };
-            this.Controls.Add(pnlDescription);
+            Controls.Add(pnlDescription);
 
-            // 手动描述
             optNeedDescription = new RadioButton
             {
                 Text = "手动",
-                Location = new System.Drawing.Point(S(5), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(5), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(60), S(20)),
                 Checked = true,
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             optNeedDescription.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optNeedDescription);
 
-            // 无描述
             optNoDescription = new RadioButton
             {
                 Text = "无",
-                Location = new System.Drawing.Point(S(70), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(70), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(50), S(20)),
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             optNoDescription.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optNoDescription);
 
-            // 文件名描述
             optUseFilename = new RadioButton
             {
                 Text = "文件名",
-                Location = new System.Drawing.Point(S(125), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(125), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(75), S(20)),
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             optUseFilename.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optUseFilename);
 
-            // 文件夹名描述
             optUseFolderName = new RadioButton
             {
                 Text = "文件夹名",
-                Location = new System.Drawing.Point(S(205), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(205), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(90), S(20)),
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             optUseFolderName.CheckedChanged += DescriptionOption_CheckedChanged;
             pnlDescription.Controls.Add(optUseFolderName);
@@ -297,47 +290,46 @@ namespace WordTools.Forms
 
         private void CreateNumberPositionRow(ref int topPos)
         {
-            // 自动编号复选框（行首）
             chkAutoNumbering = new CheckBox
             {
                 Text = "自动编号",
-                Location = new System.Drawing.Point(S(15), topPos),
+                Location = new DrawingPoint(S(15), topPos),
                 Size = new Size(S(90), CTRL_HEIGHT),
-                Enabled = true,
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
-            this.Controls.Add(chkAutoNumbering);
+            chkAutoNumbering.CheckedChanged += AutoNumbering_CheckedChanged;
+            Controls.Add(chkAutoNumbering);
 
-            // 用 Panel 包裹编号位置选项的 RadioButton
             var pnlNumberPos = new Panel
             {
-                Location = new System.Drawing.Point(S(110), topPos),
+                Location = new DrawingPoint(S(110), topPos),
                 Size = new Size(S(200), CTRL_HEIGHT),
                 BackColor = Theme.Colors.Background
             };
-            this.Controls.Add(pnlNumberPos);
+            Controls.Add(pnlNumberPos);
 
-            // 编号在描述前面（默认选中）
             optNumberBeforeDesc = new RadioButton
             {
                 Text = "编号在前",
-                Location = new System.Drawing.Point(S(5), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(5), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(85), S(20)),
                 Checked = true,
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             pnlNumberPos.Controls.Add(optNumberBeforeDesc);
 
-            // 编号在描述后面
             optNumberAfterDesc = new RadioButton
             {
                 Text = "编号在后",
-                Location = new System.Drawing.Point(S(95), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(95), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(85), S(20)),
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             pnlNumberPos.Controls.Add(optNumberAfterDesc);
 
@@ -346,47 +338,45 @@ namespace WordTools.Forms
 
         private void CreateAlignmentOptionsRow(ref int topPos)
         {
-            // 对齐标签（高度与输入框一致，文字垂直居中）
             var lblAlign = new Label
             {
                 Text = "对齐:",
-                Location = new System.Drawing.Point(S(15), topPos),
+                Location = new DrawingPoint(S(15), topPos),
                 Size = new Size(S(42), CTRL_HEIGHT),
                 Font = Theme.Fonts.Bold,
                 ForeColor = Theme.Colors.Text,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            this.Controls.Add(lblAlign);
+            Controls.Add(lblAlign);
 
-            // 用 Panel 包裹对齐选项，使其与描述选项的 RadioButton 互不影响
             var pnlAlignment = new Panel
             {
-                Location = new System.Drawing.Point(S(70), topPos),
+                Location = new DrawingPoint(S(70), topPos),
                 Size = new Size(S(200), CTRL_HEIGHT),
                 BackColor = Theme.Colors.Background
             };
-            this.Controls.Add(pnlAlignment);
+            Controls.Add(pnlAlignment);
 
-            // 靠左
             optAlignLeft = new RadioButton
             {
                 Text = "靠左",
-                Location = new System.Drawing.Point(S(5), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(5), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(60), S(20)),
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             pnlAlignment.Controls.Add(optAlignLeft);
 
-            // 居中（默认选中）
             optAlignCenter = new RadioButton
             {
                 Text = "居中",
-                Location = new System.Drawing.Point(S(70), (CTRL_HEIGHT - S(20)) / 2),
+                Location = new DrawingPoint(S(70), (CTRL_HEIGHT - S(20)) / 2),
                 Size = new Size(S(60), S(20)),
                 Checked = true,
                 Font = Theme.Fonts.Default,
-                ForeColor = Theme.Colors.Text
+                ForeColor = Theme.Colors.Text,
+                BackColor = Theme.Colors.Background
             };
             pnlAlignment.Controls.Add(optAlignCenter);
 
@@ -395,33 +385,30 @@ namespace WordTools.Forms
 
         private void CreateActionButtonsRow(ref int topPos)
         {
-            // 插入文件夹按钮
             btnInsertFromFolder = Theme.CreateButton("插入文件夹", Theme.ButtonStyle.Success);
-            btnInsertFromFolder.Location = new System.Drawing.Point(S(15), topPos);
+            btnInsertFromFolder.Location = new DrawingPoint(S(15), topPos);
             btnInsertFromFolder.Size = new Size(S(100), CTRL_HEIGHT);
             btnInsertFromFolder.Click += BtnInsertFromFolder_Click;
-            this.Controls.Add(btnInsertFromFolder);
+            Controls.Add(btnInsertFromFolder);
 
-            // 选择文件按钮
             btnSelectFiles = Theme.CreateButton("选择文件", Theme.ButtonStyle.Primary);
-            btnSelectFiles.Location = new System.Drawing.Point(S(125), topPos);
+            btnSelectFiles.Location = new DrawingPoint(S(125), topPos);
             btnSelectFiles.Size = new Size(S(100), CTRL_HEIGHT);
             btnSelectFiles.Click += BtnSelectFiles_Click;
-            this.Controls.Add(btnSelectFiles);
+            Controls.Add(btnSelectFiles);
 
-            // 取消按钮（靠右对齐）
             btnCancel = Theme.CreateButton("取消", Theme.ButtonStyle.Default);
-            btnCancel.Location = new System.Drawing.Point(S(380), topPos);
+            btnCancel.Location = new DrawingPoint(S(380), topPos);
             btnCancel.Size = new Size(S(80), CTRL_HEIGHT);
             btnCancel.DialogResult = DialogResult.Cancel;
-            this.Controls.Add(btnCancel);
+            Controls.Add(btnCancel);
 
             topPos += LINE_SPACING;
         }
 
         #endregion
 
-        #region 配置加载和保存
+        #region Configuration
 
         private void LoadConfiguration()
         {
@@ -429,8 +416,9 @@ namespace WordTools.Forms
             {
                 var doc = _application != null ? _application.ActiveDocument : null;
                 txtImageHeight.Text = ConfigService.GetLastImageHeightCM(doc);
-                txtFolderPath.Text = ConfigService.GetLastFolderPath(doc);
-                
+                string lastFolderPath = ConfigService.GetLastFolderPath(doc);
+                txtFolderPath.Text = Directory.Exists(lastFolderPath) ? lastFolderPath : string.Empty;
+
                 bool needDesc = ConfigService.GetNeedDescription(doc);
                 bool useFilename = ConfigService.GetUseFilenameAsDescription(doc);
                 bool useFolderName = ConfigService.GetUseFolderNameAsDescription(doc);
@@ -455,32 +443,15 @@ namespace WordTools.Forms
                 chkIncludeRoot.Checked = ConfigService.GetIncludeRootImages(doc);
                 chkIncludeSubFolder.Checked = ConfigService.GetIncludeSubFolderImages(doc);
                 chkAutoNumbering.Checked = ConfigService.GetAutoNumbering();
-
-                int alignment = ConfigService.GetNumberAlignment();
-                if (alignment == 1)
-                {
-                    optAlignLeft.Checked = true;
-                }
-                else
-                {
-                    optAlignCenter.Checked = true;
-                }
-
-                int numberPosition = ConfigService.GetNumberPosition();
-                if (numberPosition == 2)
-                {
-                    optNumberAfterDesc.Checked = true;
-                }
-                else
-                {
-                    optNumberBeforeDesc.Checked = true;
-                }
+                optAlignLeft.Checked = ConfigService.GetNumberAlignment() == 1;
+                optAlignCenter.Checked = !optAlignLeft.Checked;
+                optNumberAfterDesc.Checked = ConfigService.GetNumberPosition() == 2;
+                optNumberBeforeDesc.Checked = !optNumberAfterDesc.Checked;
 
                 UpdateAutoNumberingState();
             }
             catch
             {
-                // 使用默认值
             }
         }
 
@@ -489,11 +460,12 @@ namespace WordTools.Forms
             try
             {
                 var doc = _application != null ? _application.ActiveDocument : null;
-
-                // 保存高度（允许为空，空表示不限制）
                 ConfigService.SaveLastImageHeightCM(txtImageHeight.Text.Trim(), doc);
-                
-                ConfigService.SaveLastFolderPath(txtFolderPath.Text, doc);
+                string folderPath = txtFolderPath.Text.Trim();
+                if (Directory.Exists(folderPath))
+                {
+                    ConfigService.SaveLastFolderPath(folderPath, doc);
+                }
                 ConfigService.SaveNeedDescription(optNeedDescription.Checked, doc);
                 ConfigService.SaveUseFilenameAsDescription(optUseFilename.Checked, doc);
                 ConfigService.SaveUseFolderNameAsDescription(optUseFolderName.Checked, doc);
@@ -505,22 +477,25 @@ namespace WordTools.Forms
             }
             catch
             {
-                // 忽略保存错误
             }
         }
 
         #endregion
 
-        #region 事件处理
+        #region Events
 
         private void DescriptionOption_CheckedChanged(object sender, EventArgs e)
         {
             UpdateAutoNumberingState();
         }
 
+        private void AutoNumbering_CheckedChanged(object sender, EventArgs e)
+        {
+            UpdateAutoNumberingState();
+        }
+
         private void UpdateAutoNumberingState()
         {
-            // 无描述模式下禁用自动编号和编号位置
             if (optNoDescription.Checked)
             {
                 chkAutoNumbering.Enabled = false;
@@ -528,14 +503,19 @@ namespace WordTools.Forms
                 chkAutoNumbering.ForeColor = Theme.Colors.TextDisabled;
                 optNumberBeforeDesc.Enabled = false;
                 optNumberAfterDesc.Enabled = false;
+                optNumberBeforeDesc.ForeColor = Theme.Colors.TextDisabled;
+                optNumberAfterDesc.ForeColor = Theme.Colors.TextDisabled;
+                return;
             }
-            else
-            {
-                chkAutoNumbering.Enabled = true;
-                chkAutoNumbering.ForeColor = Theme.Colors.Text;
-                optNumberBeforeDesc.Enabled = true;
-                optNumberAfterDesc.Enabled = true;
-            }
+
+            chkAutoNumbering.Enabled = true;
+            chkAutoNumbering.ForeColor = Theme.Colors.Text;
+
+            bool numberingEnabled = chkAutoNumbering.Checked;
+            optNumberBeforeDesc.Enabled = numberingEnabled;
+            optNumberAfterDesc.Enabled = numberingEnabled;
+            optNumberBeforeDesc.ForeColor = numberingEnabled ? Theme.Colors.Text : Theme.Colors.TextDisabled;
+            optNumberAfterDesc.ForeColor = numberingEnabled ? Theme.Colors.Text : Theme.Colors.TextDisabled;
         }
 
         private void BtnBrowseFolder_Click(object sender, EventArgs e)
@@ -558,18 +538,26 @@ namespace WordTools.Forms
         {
             try
             {
-                string folderPath = txtFolderPath.Text;
-
+                string folderPath = txtFolderPath.Text.Trim();
                 if (string.IsNullOrEmpty(folderPath))
                 {
                     MessageBox.Show("请选择文件夹！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
+                if (!Directory.Exists(folderPath))
+                {
+                    MessageBox.Show("所选文件夹不存在，可能已被移动、删除，或当前不可访问。请重新选择有效文件夹。", "提示",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    txtFolderPath.Focus();
+                    txtFolderPath.SelectAll();
+                    return;
+                }
+
                 float minHeight;
                 if (!ImageService.ValidateAndConvertHeight(txtImageHeight.Text, out minHeight))
                 {
-                    MessageBox.Show("输入的高度无效，请输入大于 0 的数字。", "提示", 
+                    MessageBox.Show("输入的高度无效，请输入大于 0 的数字。", "提示",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
@@ -582,27 +570,26 @@ namespace WordTools.Forms
                 bool includeRootImages = chkIncludeRoot.Checked;
                 bool includeSubFolderImages = chkIncludeSubFolder.Checked;
                 bool needAutoNumbering = chkAutoNumbering.Checked;
-                int numberAlignment = optAlignCenter.Checked ? 2 : 1; // 2=居中, 1=靠左
-                int numberPosition = optNumberAfterDesc.Checked ? 2 : 1; // 2=在后, 1=在前
+                int numberAlignment = optAlignCenter.Checked ? 2 : 1;
+                int numberPosition = optNumberAfterDesc.Checked ? 2 : 1;
 
-                this.Hide();
-                // 将Word窗口置顶，确保插图过程中Word保持可见
-                try
+                PendingRequest = new InsertPhotosRequest
                 {
-                    if (_application != null && _application.ActiveWindow != null)
-                    {
-                        _application.ActiveWindow.WindowState = Microsoft.Office.Interop.Word.WdWindowState.wdWindowStateNormal;
-                        _application.ActiveWindow.Activate();
-                    }
-                }
-                catch { }
-                System.Windows.Forms.Application.DoEvents();
+                    Mode = InsertPhotosRequestMode.Folder,
+                    FolderPath = folderPath,
+                    MinHeight = minHeight,
+                    NeedDescription = needDescription,
+                    UseFileNameAsDescription = useFileNameAsDescription,
+                    UseFolderNameAsDescription = useFolderNameAsDescription,
+                    IncludeRootImages = includeRootImages,
+                    IncludeSubFolderImages = includeSubFolderImages,
+                    NeedAutoNumbering = needAutoNumbering,
+                    NumberAlignment = numberAlignment,
+                    NumberPosition = numberPosition
+                };
 
-                var progressService = new ProgressService(_application);
-                progressService.InsertPhotosWithProgress(
-                    folderPath, minHeight, needDescription,
-                    useFileNameAsDescription, useFolderNameAsDescription, includeRootImages, includeSubFolderImages,
-                    needAutoNumbering, numberAlignment, numberPosition);
+                DialogResult = DialogResult.OK;
+                Close();
             }
             catch (Exception ex)
             {
@@ -617,13 +604,11 @@ namespace WordTools.Forms
             {
                 string lastPath = ConfigService.GetLastFolderPath();
                 var selectedFiles = FileService.SelectImageFiles("请选择图片文件...", lastPath);
-
                 if (selectedFiles == null || selectedFiles.Length == 0)
                 {
                     return;
                 }
 
-                // 保存最后的文件夹路径
                 ConfigService.SaveLastFolderPath(FileService.GetParentFolder(selectedFiles[0]));
 
                 float minHeight;
@@ -640,26 +625,24 @@ namespace WordTools.Forms
                 bool useFileNameAsDescription = optUseFilename.Checked;
                 bool useFolderNameAsDescription = optUseFolderName.Checked;
                 bool needAutoNumbering = chkAutoNumbering.Checked;
-                int numberAlignment = optAlignCenter.Checked ? 2 : 1; // 2=居中, 1=靠左
-                int numberPosition = optNumberAfterDesc.Checked ? 2 : 1; // 2=在后, 1=在前
+                int numberAlignment = optAlignCenter.Checked ? 2 : 1;
+                int numberPosition = optNumberAfterDesc.Checked ? 2 : 1;
 
-                this.Hide();
-                // 将Word窗口置顶，确保插图过程中Word保持可见
-                try
+                PendingRequest = new InsertPhotosRequest
                 {
-                    if (_application != null && _application.ActiveWindow != null)
-                    {
-                        _application.ActiveWindow.WindowState = Microsoft.Office.Interop.Word.WdWindowState.wdWindowStateNormal;
-                        _application.ActiveWindow.Activate();
-                    }
-                }
-                catch { }
-                System.Windows.Forms.Application.DoEvents();
+                    Mode = InsertPhotosRequestMode.SelectedFiles,
+                    SelectedFiles = selectedFiles,
+                    MinHeight = minHeight,
+                    NeedDescription = needDescription,
+                    UseFileNameAsDescription = useFileNameAsDescription,
+                    UseFolderNameAsDescription = useFolderNameAsDescription,
+                    NeedAutoNumbering = needAutoNumbering,
+                    NumberAlignment = numberAlignment,
+                    NumberPosition = numberPosition
+                };
 
-                var progressService = new ProgressService(_application);
-                progressService.InsertSelectedPhotosWithProgress(
-                    selectedFiles, minHeight, needDescription,
-                    useFileNameAsDescription, useFolderNameAsDescription, needAutoNumbering, numberAlignment, numberPosition);
+                DialogResult = DialogResult.OK;
+                Close();
             }
             catch (Exception ex)
             {
@@ -671,3 +654,4 @@ namespace WordTools.Forms
         #endregion
     }
 }
+

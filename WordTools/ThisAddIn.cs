@@ -7,6 +7,7 @@ using Extensibility;
 using System.Runtime.InteropServices;
 using Office = Microsoft.Office.Core;
 using WordTools.Forms;
+using WordTools.Services;
 
 namespace WordTools
 {
@@ -121,6 +122,23 @@ namespace WordTools
             }
         }
 
+        public bool GetDetailedLoggingPressed(Office.IRibbonControl control)
+        {
+            return ConfigService.GetDetailedLoggingEnabled();
+        }
+
+        public bool GetBenchmarkLoggingPressed(Office.IRibbonControl control)
+        {
+            return LoggingOptionsStateController.Normalize(
+                ConfigService.GetDetailedLoggingEnabled(),
+                ConfigService.GetBenchmarkLoggingEnabled()).BenchmarkLoggingEnabled;
+        }
+
+        public bool GetBenchmarkLoggingEnabled(Office.IRibbonControl control)
+        {
+            return ConfigService.GetDetailedLoggingEnabled();
+        }
+
         #region 按钮点击回调
 
         /// <summary>
@@ -129,6 +147,47 @@ namespace WordTools
         public void OnInsertPhotosClick(Office.IRibbonControl control)
         {
             ShowInsertPhotosForm();
+        }
+
+        public void OnShowLoggingSettingsSummary(Office.IRibbonControl control)
+        {
+            var state = LoggingOptionsStateController.Normalize(
+                ConfigService.GetDetailedLoggingEnabled(),
+                ConfigService.GetBenchmarkLoggingEnabled());
+
+            string message =
+                "当前日志设置：\n\n" +
+                "详细日志：" + (state.DetailedLoggingEnabled ? "已开启" : "已关闭") + "\n" +
+                "性能基准 CSV：" + (state.BenchmarkLoggingEnabled ? "已开启" : "已关闭") + "\n\n" +
+                "提示：点击右侧下拉箭头可直接调整这两项设置。";
+
+            MessageBox.Show(
+                message,
+                "日志设置",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        public void OnToggleDetailedLogging(Office.IRibbonControl control, bool pressed)
+        {
+            var state = LoggingOptionsStateController.Normalize(
+                pressed,
+                ConfigService.GetBenchmarkLoggingEnabled());
+
+            ConfigService.SaveDetailedLoggingEnabled(state.DetailedLoggingEnabled);
+            ConfigService.SaveBenchmarkLoggingEnabled(state.BenchmarkLoggingEnabled);
+            InvalidateRibbon();
+        }
+
+        public void OnToggleBenchmarkLogging(Office.IRibbonControl control, bool pressed)
+        {
+            var state = LoggingOptionsStateController.Normalize(
+                ConfigService.GetDetailedLoggingEnabled(),
+                pressed);
+
+            ConfigService.SaveDetailedLoggingEnabled(state.DetailedLoggingEnabled);
+            ConfigService.SaveBenchmarkLoggingEnabled(state.BenchmarkLoggingEnabled);
+            InvalidateRibbon();
         }
 
         /// <summary>
@@ -245,9 +304,18 @@ namespace WordTools
         {
             try
             {
+                InsertPhotosRequest pendingRequest = null;
                 using (var form = new InsertPhotosForm(Globals.Application))
                 {
-                    form.ShowDialog();
+                    if (form.ShowDialog() == DialogResult.OK)
+                    {
+                        pendingRequest = form.PendingRequest;
+                    }
+                }
+
+                if (pendingRequest != null)
+                {
+                    ExecuteInsertPhotosRequestDeferred(pendingRequest);
                 }
             }
             catch (Exception ex)
@@ -258,6 +326,63 @@ namespace WordTools
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+        }
+
+        private void ExecuteInsertPhotosRequest(InsertPhotosRequest request)
+        {
+            if (request == null)
+            {
+                return;
+            }
+
+            var progressService = new ProgressService(Globals.Application);
+            if (request.Mode == InsertPhotosRequestMode.Folder)
+            {
+                progressService.InsertPhotosWithProgress(
+                    request.FolderPath,
+                    request.MinHeight,
+                    request.NeedDescription,
+                    request.UseFileNameAsDescription,
+                    request.UseFolderNameAsDescription,
+                    request.IncludeRootImages,
+                    request.IncludeSubFolderImages,
+                    request.NeedAutoNumbering,
+                    request.NumberAlignment,
+                    request.NumberPosition);
+                return;
+            }
+
+            progressService.InsertSelectedPhotosWithProgress(
+                request.SelectedFiles,
+                request.MinHeight,
+                request.NeedDescription,
+                request.UseFileNameAsDescription,
+                request.UseFolderNameAsDescription,
+                request.NeedAutoNumbering,
+                request.NumberAlignment,
+                request.NumberPosition);
+        }
+
+        private void ExecuteInsertPhotosRequestDeferred(InsertPhotosRequest request)
+        {
+            if (request == null)
+            {
+                return;
+            }
+
+            var invoker = new Control();
+            invoker.CreateControl();
+            invoker.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    ExecuteInsertPhotosRequest(request);
+                }
+                finally
+                {
+                    invoker.Dispose();
+                }
+            }));
         }
 
         #endregion
