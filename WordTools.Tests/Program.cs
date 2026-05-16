@@ -39,6 +39,9 @@ static class Program
         Run("Insert photos form closes before launching insertion work", TestInsertPhotosFormClosesBeforeLaunchingInsertionWork);
         Run("Ribbon XML exposes a logging settings menu", TestRibbonXmlExposesLoggingSettingsMenu);
         Run("Progress service no longer forces Word activation on every progress refresh", TestProgressServiceSourceAvoidsPerRefreshWordActivation);
+        Run("Inno Setup exposes only 64-bit Word as supported", TestSetupScriptDocumentsSupportedMatrix);
+        Run("Registration scripts clearly reject unsupported hosts and bitness", TestRegistrationScriptsRejectUnsupportedHostsAndBitness);
+        Run("Installation guide documents the real support matrix", TestInstallationGuideDocumentsRealSupportMatrix);
         Run("Prefer current row without scanning fallback", TestPreferCurrentRowWithoutScanningFallback);
         Run("Fallback scan finds next valid row", TestFallbackScanFindsNextValidRow);
         Run("Skip row when second cell is merged", TestSkipMergedRow);
@@ -496,6 +499,49 @@ static class Program
 
         AssertTrue(source.IndexOf("EnsureWordWindowActive();", StringComparison.Ordinal) < 0,
             "progress refresh should not force Word activation on every UI update");
+    }
+
+    private static void TestSetupScriptDocumentsSupportedMatrix()
+    {
+        string source = ReadProjectSource("Setup.iss");
+
+        AssertTrue(source.Contains("ARCH_X86") && source.Contains("ARCH_X64"),
+            "setup script should define separate x86 and x64 build switches");
+        AssertTrue(source.Contains("WordToolbox_Setup_x86") && source.Contains("WordToolbox_Setup_x64"),
+            "setup script should produce architecture-specific output package names");
+        AssertTrue(source.Contains("仅支持 64 位 Microsoft Word"),
+            "setup script should state that only 64-bit Word is supported");
+        AssertTrue(source.Contains("暂不支持 32 位 Word、32 位 WPS、64 位 WPS"),
+            "setup script should explicitly warn about unsupported environments");
+    }
+
+    private static void TestRegistrationScriptsRejectUnsupportedHostsAndBitness()
+    {
+        string ps1 = ReadProjectSource("RegisterPlugin.ps1");
+        string bat = ReadProjectSource("RegisterPlugin.bat");
+
+        AssertTrue(ps1.Contains("仅支持 64 位 Microsoft Word"),
+            "PowerShell registration script should explain the only supported host");
+        AssertTrue(ps1.Contains("暂不支持 32 位 Word、32 位 WPS、64 位 WPS"),
+            "PowerShell registration script should reject unsupported hosts and bitness");
+        AssertTrue(bat.Contains("仅支持 64 位 Microsoft Word"),
+            "batch registration script should explain the only supported host");
+        AssertTrue(bat.Contains("暂不支持 32 位 Word、32 位 WPS、64 位 WPS"),
+            "batch registration script should reject unsupported hosts and bitness");
+    }
+
+    private static void TestInstallationGuideDocumentsRealSupportMatrix()
+    {
+        string guide = ReadProjectSource("INSTALLATION.md");
+
+        AssertTrue(guide.Contains("64 位 Word：支持"),
+            "installation guide should mark 64-bit Word as supported");
+        AssertTrue(guide.Contains("32 位 Word：暂不支持"),
+            "installation guide should mark 32-bit Word as unsupported");
+        AssertTrue(guide.Contains("32 位 WPS：暂不支持") && guide.Contains("64 位 WPS：暂不支持"),
+            "installation guide should mark WPS variants as unsupported");
+        AssertTrue(guide.Contains("x86 安装包仅用于展示当前不支持的位数提示"),
+            "installation guide should clarify that the x86 package is not a supported delivery target");
     }
 
     private static void TestBenchmarkLogWritesHeaderOnce()

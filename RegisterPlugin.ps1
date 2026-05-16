@@ -1,78 +1,110 @@
-﻿# Word COM 加载项注册脚本
-# 必须以管理员身份运行
+﻿# WordTools COM 加载项注册脚本
+# 当前版本仅正式支持 64 位 Microsoft Word。
+
+[CmdletBinding()]
+param(
+    [ValidateSet("Auto", "x86", "x64")]
+    [string]$Architecture = "Auto",
+
+    [ValidateSet("Debug", "Release", "Debug_verify")]
+    [string]$Configuration = "Debug",
+
+    [ValidateSet("Word", "WPS", "Both")]
+    [string]$Host = "Word"
+)
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "========================================" -ForegroundColor Green
-Write-Host "Word 插件注册脚本 (PowerShell)" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Green
-Write-Host ""
+function Test-Administrator {
+    $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
 
-# 检查管理员权限
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
+function Show-UnsupportedMessage([string]$Reason) {
+    Write-Host "[错误] 当前版本仅支持 64 位 Microsoft Word。" -ForegroundColor Red
+    Write-Host "[错误] 暂不支持 32 位 Word、32 位 WPS、64 位 WPS。" -ForegroundColor Red
+    Write-Host "[说明] $Reason" -ForegroundColor Yellow
+    Read-Host "按回车退出"
+    exit 1
+}
+
+function Resolve-Architecture([string]$RequestedArchitecture) {
+    if ($RequestedArchitecture -eq "Auto") {
+        return "x64"
+    }
+
+    return $RequestedArchitecture
+}
+
+if (-not (Test-Administrator)) {
     Write-Host "[错误] 请以管理员身份运行此脚本！" -ForegroundColor Red
-    Write-Host "右键点击此文件，选择'以管理员身份运行'" -ForegroundColor Yellow
-    Read-Host "按任意键退出"
+    Write-Host "右键点击此文件，选择“以管理员身份运行”" -ForegroundColor Yellow
+    Read-Host "按回车退出"
     exit 1
 }
 
-# 设置路径
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$DLL_PATH = Join-Path $ScriptDir "WordTools\bin\Debug\WordTools.dll"
-$REGASM_PATH = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
+$resolvedArchitecture = Resolve-Architecture $Architecture
 
-if (-not (Test-Path $DLL_PATH)) {
-    Write-Host "[错误] 找不到 DLL 文件: $DLL_PATH" -ForegroundColor Red
-    Write-Host "请先在 Visual Studio 中编译项目" -ForegroundColor Yellow
-    Read-Host "按任意键退出"
+if ($resolvedArchitecture -ne "x64") {
+    Show-UnsupportedMessage "当前脚本不会为 x86 环境执行注册。"
+}
+
+if ($Host -ne "Word") {
+    Show-UnsupportedMessage "当前脚本不会为 WPS 或混合宿主执行注册。"
+}
+
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$dllPath = Join-Path $scriptDir "WordTools\bin\$Configuration\WordTools.dll"
+$regAsmPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
+$ngenPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
+$progId = "WordTools.ThisAddIn"
+$registryPath = "HKCU:\Software\Microsoft\Office\Word\Addins\$progId"
+
+if (-not (Test-Path $dllPath)) {
+    Write-Host "[错误] 找不到 DLL 文件: $dllPath" -ForegroundColor Red
+    Write-Host "请先编译 WordTools 项目，或调整 -Configuration 参数。" -ForegroundColor Yellow
+    Read-Host "按回车退出"
     exit 1
 }
 
-if (-not (Test-Path $REGASM_PATH)) {
-    Write-Host "[错误] 找不到 regasm.exe: $REGASM_PATH" -ForegroundColor Red
-    Read-Host "按任意键退出"
+if (-not (Test-Path $regAsmPath)) {
+    Write-Host "[错误] 找不到 regasm.exe: $regAsmPath" -ForegroundColor Red
+    Read-Host "按回车退出"
     exit 1
 }
 
-Write-Host "DLL 路径: $DLL_PATH" -ForegroundColor Cyan
-Write-Host "使用 regasm: $REGASM_PATH" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "WordTools 插件注册脚本 (PowerShell)" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "当前版本仅支持 64 位 Microsoft Word。" -ForegroundColor Cyan
+Write-Host "DLL 路径: $dllPath" -ForegroundColor Cyan
+Write-Host "使用 regasm: $regAsmPath" -ForegroundColor Cyan
 Write-Host ""
 
-# 执行注册
 Write-Host "正在注册 COM 加载项..." -ForegroundColor Yellow
-& $REGASM_PATH /codebase $DLL_PATH
+& $regAsmPath /codebase $dllPath
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "[错误] 注册失败！" -ForegroundColor Red
-    Read-Host "按任意键退出"
+    Write-Host "[错误] COM 注册失败！" -ForegroundColor Red
+    Read-Host "按回车退出"
     exit 1
 }
 
-Write-Host ""
-Write-Host "正在添加注册表项..." -ForegroundColor Yellow
-
-# 添加 Word Addins 注册表项
-$ProgId = "WordTools.ThisAddIn"
-$RegistryPath = "HKCU:\Software\Microsoft\Office\Word\Addins\$ProgId"
-
-# 创建注册表项
-if (-not (Test-Path $RegistryPath)) {
-    New-Item -Path $RegistryPath -Force | Out-Null
+if (-not (Test-Path $registryPath)) {
+    New-Item -Path $registryPath -Force | Out-Null
 }
 
-# 设置注册表值
-New-ItemProperty -Path $RegistryPath -Name "FriendlyName" -Value "Word工具箱" -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $RegistryPath -Name "Description" -Value "Word工具箱插件" -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $RegistryPath -Name "LoadBehavior" -Value 3 -PropertyType DWORD -Force | Out-Null
-New-ItemProperty -Path $RegistryPath -Name "CommandLineSafe" -Value 0 -PropertyType DWORD -Force | Out-Null
+New-ItemProperty -Path $registryPath -Name "FriendlyName" -Value "Word工具箱" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $registryPath -Name "Description" -Value "Word工具箱插件" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $registryPath -Name "LoadBehavior" -Value 3 -PropertyType DWORD -Force | Out-Null
+New-ItemProperty -Path $registryPath -Name "CommandLineSafe" -Value 0 -PropertyType DWORD -Force | Out-Null
 
 Write-Host ""
 Write-Host "正在执行 NGen 预编译..." -ForegroundColor Yellow
-$NGEN_PATH = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
-if (Test-Path $NGEN_PATH) {
-    & $NGEN_PATH install $DLL_PATH
+if (Test-Path $ngenPath) {
+    & $ngenPath install $dllPath
     if ($LASTEXITCODE -eq 0) {
         Write-Host "NGen 预编译完成" -ForegroundColor Green
     } else {
@@ -89,12 +121,7 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "下一步操作：" -ForegroundColor Cyan
 Write-Host "1. 完全关闭 Microsoft Word（包括后台进程）" -ForegroundColor White
-Write-Host "2. 重新打开 Microsoft Word" -ForegroundColor White
-Write-Host "3. 点击'文件' -> '选项' -> '加载项'" -ForegroundColor White
-Write-Host "4. 在底部'管理'下拉菜单选择'COM 加载项'，点击'转到...'" -ForegroundColor White
-Write-Host "5. 勾选'Word工具箱'" -ForegroundColor White
-Write-Host "6. 点击'确定'" -ForegroundColor White
+Write-Host "2. 重新打开 64 位 Microsoft Word" -ForegroundColor White
+Write-Host "3. 在“文件 -> 选项 -> 加载项 -> COM 加载项”中检查插件" -ForegroundColor White
 Write-Host ""
-Write-Host "启用后，Word 顶部会出现'Word工具箱'选项卡" -ForegroundColor Yellow
-Write-Host ""
-Read-Host "按任意键退出"
+Read-Host "按回车退出"
