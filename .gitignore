@@ -17,8 +17,23 @@ obj/
 ## NuGet 包
 packages/
 
+## 发布输出
+publish/
+
+## 测试项目输出
+TestResults/
+
 ## 其他
 *.log
 *.tmp
 Thumbs.db
 Desktop.ini
+
+## 密钥与证书（安全敏感文件）
+*.pfx
+*.snk
+*.key
+
+## ClickOnce / VSTO 部署
+*.application
+*.deploy
