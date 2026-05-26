@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("Probe", "Plan", "Register", "Unregister")]
+    [ValidateSet("Probe", "Plan", "Register", "Unregister", "WpsAddinsWlExperiment")]
     [string]$Mode = "Probe",
 
     [ValidateSet("PreviewOnly", "Live")]
@@ -30,7 +30,18 @@ param(
 
     [switch]$AppendEvidenceMarkdown,
 
-    [string]$EvidenceMarkdownPath
+    [string]$EvidenceMarkdownPath,
+
+    [ValidateSet("backup", "write", "verify", "restore")]
+    [string]$Action,
+
+    [string]$ProgId = "",
+
+    [string]$ValuePayload = "",
+
+    [string]$ExperimentId = "wps-addinswl-experiment-1",
+
+    [string]$EvidenceDir
 )
 
 # Usage example for the probe gate:
@@ -4169,6 +4180,106 @@ switch ($Mode) {
         Save-ProbeOutput -JsonText $json -TargetPath $OutputPath
         Save-TextOutput -Text (Get-InstallerDecisionSummaryText -ProbeResult $requestedProbeResult -PreviewPlan $unregisterPlan) -TargetPath $SummaryTextPath
         $json
+        break
+    }
+    "WpsAddinsWlExperiment" {
+        $registryPath = "HKCU:\Software\Kingsoft\Office\WPS\AddinsWl"
+        $dateStamp = (Get-Date).ToString("yyyyMMdd")
+        $timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
+
+        if (-not $EvidenceDir) { $EvidenceDir = Join-Path $PSScriptRoot "..\docs\installer\evidence" }
+        if (-not (Test-Path -LiteralPath $EvidenceDir -PathType Container)) {
+            New-Item -Path $EvidenceDir -ItemType Directory -Force | Out-Null
+        }
+
+        $backupPath = Join-Path $EvidenceDir "CurrentMachine-WpsX86-AddinsWl-backup-$dateStamp.reg"
+
+        switch ($Action) {
+            "backup" {
+                reg export "HKCU\Software\Kingsoft\Office\WPS\AddinsWl" `"$backupPath`" *>$null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Backup failed: reg export exit code $LASTEXITCODE"
+                    return
+                }
+                $result = [pscustomobject]@{
+                    Action = "backup"
+                    ExperimentId = $ExperimentId
+                    Timestamp = $timestamp
+                    BackupSucceeded = $true
+                    BackupPath = $backupPath
+                }
+                $result | ConvertTo-Json -Depth 4
+                break
+            }
+            "write" {
+                if (-not $ProgId) { Write-Error "-ProgId is required for write action"; return }
+                Set-ItemProperty -Path $registryPath -Name $ProgId -Value $ValuePayload -Type String -Force
+                $result = [pscustomobject]@{
+                    Action = "write"
+                    ExperimentId = $ExperimentId
+                    Timestamp = $timestamp
+                    WriteSucceeded = $true
+                    ProgId = $ProgId
+                    ValuePayload = $ValuePayload
+                }
+                $result | ConvertTo-Json -Depth 4
+                break
+            }
+            "verify" {
+                if (-not $ProgId) { Write-Error "-ProgId is required for verify action"; return }
+                try {
+                    $actual = (Get-ItemProperty -Path $registryPath -ErrorAction Stop).$ProgId
+                    $match = ($actual -eq $ValuePayload)
+                    $result = [pscustomobject]@{
+                        Action = "verify"
+                        ExperimentId = $ExperimentId
+                        Timestamp = $timestamp
+                        VerifySucceeded = $match
+                        Expected = $ValuePayload
+                        Actual = $actual
+                    }
+                    $result | ConvertTo-Json -Depth 4
+                }
+                catch {
+                    $result = [pscustomobject]@{
+                        Action = "verify"
+                        ExperimentId = $ExperimentId
+                        Timestamp = $timestamp
+                        VerifySucceeded = $false
+                        Error = "Cannot read AddinsWl: $_"
+                    }
+                    $result | ConvertTo-Json -Depth 4
+                }
+                break
+            }
+            "restore" {
+                if (-not (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+                    Write-Error "Backup file not found: $backupPath"
+                    return
+                }
+                reg import `"$backupPath`" *>$null
+                if ($LASTEXITCODE -ne 0) {
+                    $result = [pscustomobject]@{
+                        Action = "restore"
+                        ExperimentId = $ExperimentId
+                        Timestamp = $timestamp
+                        RestoreSucceeded = $false
+                        Error = "reg import failed with exit code $LASTEXITCODE"
+                    }
+                    $result | ConvertTo-Json -Depth 4
+                    return
+                }
+                $result = [pscustomobject]@{
+                    Action = "restore"
+                    ExperimentId = $ExperimentId
+                    Timestamp = $timestamp
+                    RestoreSucceeded = $true
+                    BackupPath = $backupPath
+                }
+                $result | ConvertTo-Json -Depth 4
+                break
+            }
+        }
         break
     }
 }
