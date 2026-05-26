@@ -35,8 +35,10 @@ param(
     [ValidateSet("backup", "write", "verify", "restore")]
     [string]$Action,
 
+    [AllowEmptyString()]
     [string]$ProgId = "",
 
+    [AllowEmptyString()]
     [string]$ValuePayload = "",
 
     [string]$ExperimentId = "wps-addinswl-experiment-1",
