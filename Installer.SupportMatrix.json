@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "host": "Word",
+      "bitness": "x86",
+      "status": "planned",
+      "validationStage": "probe only",
+      "activationRoute": "WordComAddin",
+      "note": "Probe pending. Current installer and registration path remain 64-bit Word only."
+    },
+    {
+      "host": "Word",
+      "bitness": "x64",
+      "status": "supported",
+      "validationStage": "formal p0 passed",
+      "activationRoute": "WordComAddin",
+      "note": "Validated on the current machine from probe evidence label CurrentMachine-Word64-20260517, mixed-host probe evidence label CurrentMachine-Word64-WpsX86-20260518, direct live registration evidence label CurrentMachine-Word64-LiveRegister-InstallerFix, installer live registration evidence label CurrentMachine-Word64-LiveRegister-InstallerSuccess-20260520, live uninstall evidence label CurrentMachine-Word64-LiveUnregister-20260520, and live restore evidence label CurrentMachine-Word64-LiveRegister-Restore-20260520. Current installer and registration path remain 64-bit Word only."
+    },
+    {
+      "host": "WPS",
+      "bitness": "x86",
+      "status": "ui-experiment",
+      "validationStage": "experimenting",
+      "activationRoute": "WpsNativePlugin",
+      "note": "Experimenting AddinsWl write contract via Invoke-WpsAddinsWlExperiment incremental chain starting 2026-05-26. Probe and shared-core live registry evidence previously collected, but WPS UI validation failed on 2026-05-24: the Tools ribbon did not surface a WordTools entry. Keep WPS x86 in experiment until the real WPS add-in write contract is understood and verified through the experiment chain."
+    },
+    {
+      "host": "WPS",
+      "bitness": "x64",
+      "status": "planned",
+      "validationStage": "probe only",
+      "activationRoute": "WpsNativePlugin",
+      "note": "Probe pending. Do not route WPS through the live Word registration path."
+    }
+  ]
+}
