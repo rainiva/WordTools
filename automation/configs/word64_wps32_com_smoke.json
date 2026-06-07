@@ -1,0 +1,27 @@
+{
+  "env_name": "word64_wps32_com_smoke",
+  "plugin": {
+    "configuration": "Release",
+    "prog_id": "WordTools.ThisAddIn"
+  },
+  "hosts": {
+    "word": { "enabled": true, "expected_bitness": "64" },
+    "wps": { "enabled": false, "expected_bitness": "32" }
+  },
+  "phases": {
+    "probe": true,
+    "register": false,
+    "verify_registration": false,
+    "smoke": true,
+    "unregister": false,
+    "verify_cleanup": false
+  },
+  "smoke": {
+    "mode": "com_load",
+    "host_target": "Word"
+  },
+  "output": {
+    "report_dir": "reports/word64_wps32_com_smoke",
+    "screenshot_dir": "screenshots/word64_wps32_com_smoke"
+  }
+}

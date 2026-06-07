@@ -1,0 +1,54 @@
+{
+  "env_name": "word64_wps32",
+  "plugin": {
+    "configuration": "Release",
+    "prog_id": "WordTools.ThisAddIn",
+    "word_architecture": "x64",
+    "wps_architecture": "x86"
+  },
+  "hosts": {
+    "word": { "enabled": true, "expected_bitness": "64" },
+    "wps": { "enabled": true, "expected_bitness": "32" }
+  },
+  "phases": {
+    "probe": true,
+    "register": true,
+    "verify_registration": false,
+    "smoke": true,
+    "unregister": true,
+    "verify_cleanup": true
+  },
+  "registration_cases": [
+    {
+      "case_id": "REG-004",
+      "case_name": "Word64 + WPS32 共存识别",
+      "requested_host": "Both",
+      "execution_intent": "PreviewOnly"
+    },
+    {
+      "case_id": "REG-020",
+      "case_name": "只注册 Word64",
+      "requested_host": "Word",
+      "execution_intent": "PreviewOnly"
+    },
+    {
+      "case_id": "REG-022",
+      "case_name": "同时注册 Word64 + WPS32",
+      "requested_host": "Both",
+      "execution_intent": "PreviewOnly"
+    }
+  ],
+  "smoke": {
+    "mode": "discovery",
+    "host_target": "Both"
+  },
+  "unregister": { "execution_intent": "PreviewOnly" },
+  "test_assets": {
+    "docx": "assets/blank.docx",
+    "image": "assets/test-small.jpg"
+  },
+  "output": {
+    "report_dir": "reports/word64_wps32",
+    "screenshot_dir": "screenshots/word64_wps32"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "env_name": "word32_wps32",
+  "plugin": {
+    "configuration": "Release",
+    "prog_id": "WordTools.ThisAddIn"
+  },
+  "hosts": {
+    "word": { "enabled": true, "expected_bitness": "32" },
+    "wps": { "enabled": true, "expected_bitness": "32" }
+  },
+  "phases": {
+    "probe": true,
+    "register": true,
+    "verify_registration": true,
+    "smoke": false,
+    "unregister": true,
+    "verify_cleanup": true
+  },
+  "registration_cases": [
+    {
+      "case_id": "REG-022",
+      "case_name": "同时注册 Word32 + WPS32",
+      "requested_host": "Both",
+      "execution_intent": "PreviewOnly"
+    }
+  ],
+  "unregister": { "execution_intent": "PreviewOnly" },
+  "test_assets": {
+    "docx": "assets/blank.docx",
+    "image": "assets/test-small.jpg"
+  },
+  "output": {
+    "report_dir": "reports/word32_wps32",
+    "screenshot_dir": "screenshots/word32_wps32"
+  }
+}

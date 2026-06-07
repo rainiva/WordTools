@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "cases": [
+    { "case_id": "REG-001", "layer": "probe", "case_name": "识别 Word 32 位" },
+    { "case_id": "REG-001b", "layer": "probe", "case_name": "识别 Word 64 位" },
+    { "case_id": "REG-002", "layer": "probe", "case_name": "识别 WPS 32 位" },
+    { "case_id": "REG-003", "layer": "probe", "case_name": "识别 WPS 64 位" },
+    { "case_id": "REG-004", "layer": "probe", "case_name": "Word + WPS 共存时同时识别" },
+    { "case_id": "REG-005", "layer": "probe", "case_name": "宿主不存在时不误报" },
+    { "case_id": "REG-010", "layer": "register", "case_name": "Word 32 位使用 x86 插件" },
+    { "case_id": "REG-010b", "layer": "register", "case_name": "Word 64 位使用 x64 插件" },
+    { "case_id": "REG-011", "layer": "register", "case_name": "WPS 32 位使用 x86 插件" },
+    { "case_id": "REG-012", "layer": "register", "case_name": "WPS 64 位使用 x64 插件" },
+    { "case_id": "REG-013", "layer": "register", "case_name": "位数不匹配时拒绝注册" },
+    { "case_id": "REG-020", "layer": "register", "case_name": "只注册 Word" },
+    { "case_id": "REG-021", "layer": "register", "case_name": "只注册 WPS" },
+    { "case_id": "REG-022", "layer": "register", "case_name": "同时注册 Word + WPS" },
+    { "case_id": "REG-023", "layer": "register", "case_name": "重复注册不产生重复项" },
+    { "case_id": "REG-024", "layer": "register", "case_name": "注册后立即启动宿主可加载插件" },
+    { "case_id": "REG-030", "layer": "unregister", "case_name": "只卸载 Word 插件" },
+    { "case_id": "REG-031", "layer": "unregister", "case_name": "只卸载 WPS 插件" },
+    { "case_id": "REG-032", "layer": "unregister", "case_name": "全部卸载" },
+    { "case_id": "REG-033", "layer": "unregister", "case_name": "卸载 Word 不影响 WPS" },
+    { "case_id": "REG-034", "layer": "unregister", "case_name": "卸载 WPS 不影响 Word" },
+    { "case_id": "REG-035", "layer": "unregister", "case_name": "重复卸载不报错" }
+  ]
+}

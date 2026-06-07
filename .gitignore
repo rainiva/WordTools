@@ -40,3 +40,10 @@ Desktop.ini
 
 ## Qoder IDE
 .qoder/
+
+## 自动化测试输出
+automation/reports/
+automation/screenshots/
+automation/.pytest_cache/
+automation/**/__pycache__/
+automation/**/*.pyc
