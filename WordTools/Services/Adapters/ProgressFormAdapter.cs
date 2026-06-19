@@ -31,6 +31,7 @@ namespace WordTools.Services.Adapters
             if (_form != null && !_form.IsDisposed)
             {
                 _form.TopMost = false;
+                _form.IsServiceClosing = true;
                 _form.Close();
                 _form.Dispose();
                 _form = null;

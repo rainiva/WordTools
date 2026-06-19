@@ -27,6 +27,11 @@ namespace WordTools.Forms
         /// </summary>
         public bool IsCloseRequestedByUser { get; private set; }
 
+        /// <summary>
+        /// 由服务代码主动触发关闭（而非用户点击 X）。
+        /// </summary>
+        public bool IsServiceClosing { get; set; }
+
         public ProgressForm(int totalFiles)
         {
             InitializeComponent(totalFiles);
@@ -99,6 +104,12 @@ namespace WordTools.Forms
         /// </summary>
         private void ProgressForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            // 服务代码主动关闭时不拦截，也不提示
+            if (IsServiceClosing)
+            {
+                return;
+            }
+
             if (e.CloseReason == CloseReason.UserClosing && !_stateController.IsCompleted)
             {
                 e.Cancel = true;
@@ -146,11 +157,12 @@ namespace WordTools.Forms
         }
 
         /// <summary>
-        /// 显示完成状态（使用 BeginInvoke 避免阻塞）
+        /// 显示完成状态。使用 Invoke 同步执行，确保 MarkCompleted 在关闭窗口前生效，
+        /// 避免代码触发的 FormClosing 误判为进行中关闭。
         /// </summary>
         public void ShowCompletion(int successCount, int failCount, double totalSeconds)
         {
-            this.BeginInvoke(new Action(() =>
+            this.Invoke(new Action(() =>
             {
                 string timeInfo = totalSeconds >= 60
                     ? string.Format("{0}分{1:F1}秒", (int)(totalSeconds / 60), totalSeconds % 60)
