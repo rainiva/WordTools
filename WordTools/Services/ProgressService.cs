@@ -52,6 +52,7 @@ namespace WordTools.Services
         // 性能模式备份
         private bool _originalScreenUpdating;
         private bool _originalDisplayAlerts;
+        private bool _highPerformanceModeEntered;
 
         private InsertionPerformanceDiagnostics _activeDiagnostics;
 
@@ -111,6 +112,11 @@ namespace WordTools.Services
         /// </summary>
         private void EnterHighPerformanceMode()
         {
+            if (_highPerformanceModeEntered)
+            {
+                return;
+            }
+
             try
             {
                 _originalScreenUpdating = _appContext.Application.ScreenUpdating;
@@ -126,24 +132,33 @@ namespace WordTools.Services
                     doc.SpellingChecked = true;
                     doc.GrammarChecked = true;
                 }
+
+                _highPerformanceModeEntered = true;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[ProgressService] Error: {ex.Message}");
+                Debug.WriteLine($"[ProgressService] EnterHighPerformanceMode error: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// 退出高性能模式
+        /// 退出高性能模式。仅在成功进入过时执行恢复，避免取消/验证失败路径把 Word 的
+        /// ScreenUpdating/DisplayAlerts 恢复到错误默认值，导致光标或界面异常。
         /// </summary>
         private void ExitHighPerformanceMode()
         {
+            if (!_highPerformanceModeEntered)
+            {
+                return;
+            }
+
             try
             {
                 _appContext.Application.ScreenUpdating = _originalScreenUpdating;
                 _appContext.Application.DisplayAlerts = _originalDisplayAlerts 
                     ? WdAlertLevel.wdAlertsAll 
                     : WdAlertLevel.wdAlertsNone;
+                _highPerformanceModeEntered = false;
             }
             catch (Exception ex)
             {
