@@ -448,6 +448,8 @@ namespace WordTools.Services
                     skippedClear,
                     insertionDiagnostics);
 
+                // 先将进度窗口标记为完成状态，避免关闭时触发“是否取消”提示
+                _progressReporter?.ShowCompletion(successCount, failCount, seconds);
                 // 更新进度窗口为完成状态
                 CloseProgressForm();
 
@@ -726,6 +728,8 @@ namespace WordTools.Services
                     skippedClear,
                     insertionDiagnostics);
 
+                // 先将进度窗口标记为完成状态，避免关闭时触发“是否取消”提示
+                _progressReporter?.ShowCompletion(successCount, failCount, seconds);
                 // 更新进度窗口为完成状态
                 CloseProgressForm();
 
