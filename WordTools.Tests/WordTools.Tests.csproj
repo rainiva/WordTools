@@ -1,14 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="Microsoft.Office.Interop.Word" Version="15.0.4797.1004" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\WordTools\Forms\FailureDetailsForm.cs" Link="Forms\FailureDetailsForm.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IDocumentContext.cs" Link="Services\Abstractions\IDocumentContext.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IFailureDetailsPresenter.cs" Link="Services\Abstractions\IFailureDetailsPresenter.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\INotificationService.cs" Link="Services\Abstractions\INotificationService.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IProgressReporter.cs" Link="Services\Abstractions\IProgressReporter.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IWordApplicationContext.cs" Link="Services\Abstractions\IWordApplicationContext.cs" />
     <Compile Include="..\WordTools\Services\BenchmarkLogService.cs" Link="Services\BenchmarkLogService.cs" />
     <Compile Include="..\WordTools\Services\ImageInsertionBatchContext.cs" Link="Services\ImageInsertionBatchContext.cs" />
     <Compile Include="..\WordTools\Services\ImageRowPlanner.cs" Link="Services\ImageRowPlanner.cs" />

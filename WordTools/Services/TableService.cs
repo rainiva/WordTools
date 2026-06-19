@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Office.Interop.Word;
 
@@ -12,6 +13,11 @@ namespace WordTools.Services
     /// </summary>
     public static class TableService
     {
+        private static void SafeIgnore(Exception ex, string context)
+        {
+            Debug.WriteLine($"{context}: {ex.Message}");
+        }
+
         #region 表格验证
 
         /// <summary>
@@ -105,7 +111,7 @@ namespace WordTools.Services
                                 if (r.Fields[i].Type == WdFieldType.wdFieldSequence)
                                     r.Fields[i].Delete();
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                         // 重新获取 Range 并清除剩余文本
                         r = targetCell.Range;
@@ -838,7 +844,7 @@ namespace WordTools.Services
                     wasScreenUpdating = app.ScreenUpdating;
                     app.ScreenUpdating = false;
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 
                 WdParagraphAlignment wdAlignment;
                 switch (alignment)
@@ -855,16 +861,16 @@ namespace WordTools.Services
                 // === Step 1: 定位光标行，确定扫描范围 ===
                 int cursorRow = 1;
                 try { cursorRow = app.Selection.Range.Cells[1].RowIndex; }
-                catch { cursorRow = 1; }
+                catch (Exception ex) { SafeIgnore(ex, "定位光标行失败，默认从第 1 行开始"); cursorRow = 1; }
                 
                 // 扫描从光标前一行开始（需判断"图片行→描述行"配对）
                 int scanStart = Math.Max(1, cursorRow - 1);
                 
                 // 临时启用ScreenUpdating让状态栏可见
-                try { if (app != null) app.ScreenUpdating = true; } catch { }
+                try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 progressCallback?.Invoke(string.Format("从第 {0} 行开始检查编号...", scanStart));
                 System.Windows.Forms.Application.DoEvents();
-                try { if (app != null) app.ScreenUpdating = false; } catch { }
+                try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
         
                 // === 快速路径尝试：跳过 InlineShapes 扫描，直接扫描编号行 ===
                 // 阶段 A：直接扫描编号行（替代 InlineShapes + imageRow 方式）
@@ -895,12 +901,12 @@ namespace WordTools.Services
                                     var m2 = Regex.Match(t2, @"^(\d+)\.");
                                     if (m2.Success) colNums[col] = int.Parse(m2.Groups[1].Value);
                                 }
-                                catch { }
+                                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                             }
                             rowNumbers[row] = colNums;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                             
                     // 每50行做一次DoEvents
                     if ((row - scanStart) % 50 == 0)
@@ -925,7 +931,7 @@ namespace WordTools.Services
                                     break;
                                 }
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                     }
         
@@ -961,10 +967,10 @@ namespace WordTools.Services
                         int totalCellsToUpdate = (numberedRows.Count - firstBadIdx) * colCount;
         
                         // 显示进度
-                        try { if (app != null) app.ScreenUpdating = true; } catch { }
+                        try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         progressCallback?.Invoke("正在快速更新编号...");
                         System.Windows.Forms.Application.DoEvents();
-                        try { if (app != null) app.ScreenUpdating = false; } catch { }
+                        try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
         
                         for (int i = firstBadIdx; i < numberedRows.Count; i++)
                         {
@@ -977,7 +983,7 @@ namespace WordTools.Services
                                     rowNumbers[row][col] == currentNum)
                                     continue;
                                 try { UpdateCellNumber(tbl.Cell(row, col), currentNum); }
-                                catch { }
+                                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                                 cellsUpdated++;
                             }
                                     
@@ -1017,14 +1023,14 @@ namespace WordTools.Services
                     foreach (InlineShape shape in shapeScanRange.InlineShapes)
                     {
                         try { imageRows.Add(shape.Range.Cells[1].RowIndex); }
-                        catch { }
+                        catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         // 每50个图片让出UI线程
                         shapeCount++;
                         if (shapeCount % 50 == 0)
                             System.Windows.Forms.Application.DoEvents();
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         
                 // 基于图片行识别描述行并提取所有列的编号值（全列缓存）
                 var sortedImageRows = new List<int>(imageRows);
@@ -1044,7 +1050,7 @@ namespace WordTools.Services
                                 if (num.HasValue)
                                     colNumbers[col] = num.Value;
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                         if (colNumbers.Count > 0)
                         {
@@ -1083,7 +1089,7 @@ namespace WordTools.Services
                                         Cell prevCell = tbl.Cell(row - 1, 1);
                                         prevRowHasImage = prevCell.Range.InlineShapes.Count > 0;
                                     }
-                                    catch { }
+                                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                                 }
                                         
                                 // 只有前一行有图片，才是真正的描述行，才能作为 baseNumber
@@ -1095,7 +1101,7 @@ namespace WordTools.Services
                                 // 如果不是真正的描述行（孤立行），继续往前找
                             }
                         }
-                        catch { }
+                        catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     }
                 }
         
@@ -1158,10 +1164,10 @@ namespace WordTools.Services
                     int currentNum = baseNumberSlow + firstBadIdxSlow * colCount + 1;
                             
                     // 在更新循环之前切换ScreenUpdating显示进度
-                    try { if (app != null) app.ScreenUpdating = true; } catch { }
+                    try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     progressCallback?.Invoke("正在更新编号...");
                     System.Windows.Forms.Application.DoEvents();
-                    try { if (app != null) app.ScreenUpdating = false; } catch { }
+                    try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                             
                     // 执行所有更新（不再在循环内切换 ScreenUpdating）
                     for (int i = firstBadIdxSlow; i < sortedRows.Count; i++)
@@ -1179,7 +1185,7 @@ namespace WordTools.Services
                                 continue; // 跳过，节省COM调用
                                     
                             try { UpdateCellNumber(tbl.Cell(row, col), currentNum); }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                             cellsUpdated++;
                         }
                                 
@@ -1196,10 +1202,10 @@ namespace WordTools.Services
                 // === 慢速路径：编号值都正确或有遗漏的描述行，检查结构是否需要增删 ===
                 // 重要：结构检查必须从表格第1行开始，避免光标位置导致遍漏
                 // 临时启用ScreenUpdating让状态栏可见
-                try { if (app != null) app.ScreenUpdating = true; } catch { }
+                try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 progressCallback?.Invoke("正在检查表格结构...");
                 System.Windows.Forms.Application.DoEvents();
-                try { if (app != null) app.ScreenUpdating = false; } catch { }
+                try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
 
                 // 补全 scanStart 前的 InlineShapes
                 if (scanStart > 1)
@@ -1210,18 +1216,18 @@ namespace WordTools.Services
                         foreach (InlineShape shape in preShapeRange.InlineShapes)
                         {
                             try { imageRows.Add(shape.Range.Cells[1].RowIndex); }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
 
                 // 临时启用ScreenUpdating让状态栏可见
-                try { if (app != null) app.ScreenUpdating = true; } catch { }
+                try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 progressCallback?.Invoke(string.Format("扫描完成({0}个图片行, {1}个编号行) 已用:{2:F2}s",
                     imageRows.Count, numbersByRow.Count, (DateTime.Now - startTime).TotalSeconds));
                 System.Windows.Forms.Application.DoEvents();
-                try { if (app != null) app.ScreenUpdating = false; } catch { }
+                try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
 
                 // === Step 3: 从第1行开始检查结构，修复增删问题 ===
                 int addedCount = 0, removedCount = 0;
@@ -1234,10 +1240,10 @@ namespace WordTools.Services
                     if (row % progressInterval == 0)
                     {
                         // 临时启用ScreenUpdating让状态栏可见
-                        try { if (app != null) app.ScreenUpdating = true; } catch { }
+                        try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         progressCallback?.Invoke(string.Format("正在检查第 {0}/{1} 行...", row, totalRows));
                         System.Windows.Forms.Application.DoEvents();
-                        try { if (app != null) app.ScreenUpdating = false; } catch { }
+                        try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     }
 
                     bool hasImage = imageRows.Contains(row);
@@ -1260,7 +1266,7 @@ namespace WordTools.Services
                                 r.SetRange(r.Start, r.End - 1);
                                 r.Text = "0."; // 临时占位
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                         addedCount++;
                         structureChanged = true;
@@ -1281,10 +1287,10 @@ namespace WordTools.Services
                                         if (cellRange.Fields[i].Type == WdFieldType.wdFieldSequence)
                                             cellRange.Fields[i].Delete(); 
                                     }
-                                    catch { }
+                                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                                 }
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                         // 清理残留文本
                         for (int col = 1; col <= colCount; col++)
@@ -1301,7 +1307,7 @@ namespace WordTools.Services
                                     if (cleaned != cellText) cellRange.Text = cleaned;
                                 }
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                         numbersByRow.Remove(row);
                         removedCount++;
@@ -1315,10 +1321,10 @@ namespace WordTools.Services
                 if (structureChanged || firstBadIdxSlow >= 0)
                 {
                     // 临时启用ScreenUpdating让状态栏可见
-                    try { if (app != null) app.ScreenUpdating = true; } catch { }
+                    try { if (app != null) app.ScreenUpdating = true; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     progressCallback?.Invoke("正在重新编号...");
                     System.Windows.Forms.Application.DoEvents();
-                    try { if (app != null) app.ScreenUpdating = false; } catch { }
+                    try { if (app != null) app.ScreenUpdating = false; } catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     
                     try
                     {
@@ -1367,7 +1373,7 @@ namespace WordTools.Services
                                         currentNum++;
                                         cellsProcessed++;
                                         try { SetCellNumber(tbl.Cell(row, col), currentNum, wdAlignment); }
-                                        catch { }
+                                        catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                                     }
                                     
                                     // 每50个单元格做一次DoEvents，不切换ScreenUpdating
@@ -1390,7 +1396,7 @@ namespace WordTools.Services
                         // 更新完成后让出UI线程
                         System.Windows.Forms.Application.DoEvents();
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
         
                 // === 结果汇报 ===
@@ -1423,7 +1429,7 @@ namespace WordTools.Services
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
             }
         }
 
@@ -1448,7 +1454,7 @@ namespace WordTools.Services
                     app.ScreenUpdating = false;
                     doc = tbl.Range.Document;
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
 
                 // 计算清除范围的起始位置
                 int clearStartRow = Math.Max(1, startRow);
@@ -1464,7 +1470,7 @@ namespace WordTools.Services
                         return 0; // 没有图片，不需要清理描述行
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
 
                 // 获取 startRow 对应的文档位置，用于判断域是否在清除范围内
                 int rangeStartPos = 0;
@@ -1472,7 +1478,7 @@ namespace WordTools.Services
                 {
                     rangeStartPos = tbl.Cell(clearStartRow, 1).Range.Start;
                 }
-                catch { rangeStartPos = 0; }
+                catch (Exception ex) { SafeIgnore(ex, "获取清除起始位置失败"); rangeStartPos = 0; }
 
                 // === 第0步：清除 Word 原生自动编号格式（ListFormat） ===
                 // 仅在全表清除时执行（startRow=1），增量模式跳过
@@ -1483,7 +1489,7 @@ namespace WordTools.Services
                     {
                         tbl.Range.ListFormat.RemoveNumbers();
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
 
                 // === 第1步优化：只扫描 clearStartRow 之后的域 ===
@@ -1524,16 +1530,16 @@ namespace WordTools.Services
                                                 default: originalAlignment = 1; break;
                                             }
                                         }
-                                        catch { originalAlignment = 2; }
+                                        catch (Exception ex) { SafeIgnore(ex, "读取段落对齐方式失败，默认居中"); originalAlignment = 2; }
                                     }
                                     allFields[i].Delete();
                                 }
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
 
                 // === 第2步优化：跳跃式扫描，只清理描述行（图片行+1）===
                 int colCount = tbl.Columns.Count;
@@ -1553,10 +1559,10 @@ namespace WordTools.Services
                     foreach (InlineShape shape in scanRange.InlineShapes)
                     {
                         try { imageRows.Add(shape.Range.Cells[1].RowIndex); }
-                        catch { }
+                        catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
 
                 // 只清理描述行（图片行+1）
                 var rowsToClean = new SortedSet<int>();
@@ -1621,7 +1627,7 @@ namespace WordTools.Services
                                                     default: originalAlignment = 1; break;
                                                 }
                                             }
-                                            catch { originalAlignment = 2; }
+                                            catch (Exception ex) { SafeIgnore(ex, "读取段落对齐方式失败，默认居中"); originalAlignment = 2; }
                                         }
                                         cellRange.Text = "";
                                     }
@@ -1636,7 +1642,7 @@ namespace WordTools.Services
                                     }
                                 }
                             }
-                            catch { }
+                            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                         }
 
                         processedCount++;
@@ -1645,17 +1651,17 @@ namespace WordTools.Services
                             progressCallback($"正在清除编号... ({processedCount}/{rowsToClean.Count})");
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
             finally
             {
                 try
                 {
                     if (app != null) app.ScreenUpdating = wasScreenUpdating;
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
             }
 
             return originalAlignment;
@@ -1732,7 +1738,7 @@ namespace WordTools.Services
                             rowHasImages[rowIdx] = true;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
 
                 // === 第二遍：编号（使用纯文本编号，传入递增的编号值）===
@@ -1769,12 +1775,12 @@ namespace WordTools.Services
                                 {
                                     InsertNumberText(tbl, rowIdx, colIdx, wdAlignment, currentNumber);
                                 }
-                                catch { }
+                                catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                                 currentNumber++; // 每列递增
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
 
                 // 纯文本编号无需更新域，直接完成
@@ -1797,9 +1803,9 @@ namespace WordTools.Services
                 return 1;
             }
 
-            // 极简化实现：只搜索最近2行，只用纯文本匹配
-            // 避免调用 ExtractNumberFromCell（它有 Fields 遍历开销）
-            for (int row = startRow - 1; row >= Math.Max(1, startRow - 2); row--)
+            // 向上搜索整个表格，找到最近的纯文本编号。
+            // 限制在单列表格列范围内扫描，避免 Fields 遍历的开销。
+            for (int row = startRow - 1; row >= 1; row--)
             {
                 try
                 {
@@ -1808,12 +1814,18 @@ namespace WordTools.Services
                     r.SetRange(r.Start, r.End - 1);
                     string text = (r.Text ?? "").Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
                     var m = Regex.Match(text, @"^(\d+)\.");
-                    if (m.Success) return int.Parse(m.Groups[1].Value) + 1;
+                    if (m.Success && int.TryParse(m.Groups[1].Value, out int val))
+                    {
+                        return val + 1;
+                    }
                 }
-                catch { }
+                catch (COMException)
+                {
+                    // 合并单元格或边界异常时继续向上搜索
+                }
             }
 
-            // 如果最近2行没找到，返回1（从1开始编号）
+            // 未找到前置编号，从 1 开始
             return 1;
         }
 
@@ -1849,7 +1861,7 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
             return null;
         }
 
@@ -1871,7 +1883,7 @@ namespace WordTools.Services
                 text = text.Replace("\r", "").Replace("\n", "").Replace("\a", "").Trim();
                 return Regex.IsMatch(text, @"^\d+\.");
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
             return false;
         }
 
@@ -1893,7 +1905,7 @@ namespace WordTools.Services
                     r.Text = newText;
                 }
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
         }
 
         /// <summary>
@@ -1915,7 +1927,7 @@ namespace WordTools.Services
                         if (r.Fields[i].Type == WdFieldType.wdFieldSequence)
                             r.Fields[i].Delete();
                     }
-                    catch { }
+                    catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                 }
                 
                 // 重新获取 Range（删除域后原 Range 失效）
@@ -1935,7 +1947,7 @@ namespace WordTools.Services
                 r.SetRange(r.Start, r.End - 1);
                 r.ParagraphFormat.Alignment = alignment;
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
         }
 
         /// <summary>
@@ -1982,7 +1994,7 @@ namespace WordTools.Services
                             if (cellRange.Fields[i].Type == WdFieldType.wdFieldSequence)
                                 cellRange.Fields[i].Delete();
                         }
-                        catch { }
+                        catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
                     }
 
                     // 重新获取 Range（删除域后原 Range 可能失效）
@@ -2013,7 +2025,7 @@ namespace WordTools.Services
                 cellRange.SetRange(cellRange.Start, cellRange.End - 1);
                 cellRange.ParagraphFormat.Alignment = alignment;
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "表格操作失败"); }
         }
 
         /// <summary>

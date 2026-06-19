@@ -12,6 +12,25 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "Matrix.Common.ps1")
 
+function Write-MatrixUtf8File {
+    param(
+        [string]$Path,
+        [string]$Content
+    )
+
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Write verification failed: file not found after write: $Path"
+    }
+
+    $readBack = [System.IO.File]::ReadAllText($Path, $encoding)
+    if ($readBack -ne $Content) {
+        throw "Write verification failed: content mismatch for $Path"
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = Get-MatrixRepoRoot
 }
@@ -58,7 +77,7 @@ if ($null -ne $coreResult) {
         if (-not [string]::IsNullOrWhiteSpace($directory) -and -not (Test-Path -LiteralPath $directory)) {
             New-Item -ItemType Directory -Path $directory -Force | Out-Null
         }
-        ($payload | ConvertTo-Json -Depth 10) | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+        Write-MatrixUtf8File -Path $OutputPath -Content ($payload | ConvertTo-Json -Depth 10)
     }
 
     Write-MatrixJsonResult -Payload $payload
@@ -136,7 +155,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     if (-not [string]::IsNullOrWhiteSpace($directory) -and -not (Test-Path -LiteralPath $directory)) {
         New-Item -ItemType Directory -Path $directory -Force | Out-Null
     }
-    ($payload | ConvertTo-Json -Depth 10) | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+    Write-MatrixUtf8File -Path $OutputPath -Content ($payload | ConvertTo-Json -Depth 10)
 }
 
 Write-MatrixJsonResult -Payload $payload

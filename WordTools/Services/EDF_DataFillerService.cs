@@ -5,6 +5,7 @@ using System.Data.OleDb;
 using System.Diagnostics;
 using System.Windows.Forms;
 using Word = Microsoft.Office.Interop.Word;
+using WordTools.Services.Abstractions;
 
 namespace WordTools.Services
 {
@@ -20,10 +21,23 @@ namespace WordTools.Services
         private string sampleSizeColumn;
         private bool replaceSampleSize;
         private DataTable excelData;
-        private int currentRow;
 
         // 配置常量
         private const string CONFIG_KEY = "EDF_ExcelDataFillerConfig";
+
+        private readonly IDocumentContext _documentContext;
+        private readonly INotificationService _notificationService;
+        private readonly IWordApplicationContext _appContext;
+
+        public EDF_DataFillerService(
+            IDocumentContext documentContext,
+            INotificationService notificationService,
+            IWordApplicationContext appContext)
+        {
+            _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));
+            _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+            _appContext = appContext ?? throw new ArgumentNullException(nameof(appContext));
+        }
 
         /// <summary>
         /// 执行数据填充
@@ -52,7 +66,7 @@ namespace WordTools.Services
                 if (!ReadExcelData())
                 {
                     onStatusUpdate?.Invoke("读取Excel数据失败！");
-                    MessageBox.Show("读取Excel数据失败！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning("读取Excel数据失败！", "错误");
                     return;
                 }
 
@@ -60,22 +74,27 @@ namespace WordTools.Services
                 onStatusUpdate?.Invoke("开始填充Word表格...");
 
                 // 填充Word表格
-                var app = Globals.ThisAddIn.Application;
-                var doc = app.ActiveDocument;
+                var doc = _documentContext.ActiveDocument;
+                if (doc == null)
+                {
+                    _notificationService.ShowWarning("当前没有打开的 Word 文档。", "提示");
+                    return;
+                }
+
                 if (FillWordTable(doc, targetColumn, onStatusUpdate))
                 {
                     onStatusUpdate?.Invoke("数据填充完成！");
-                    MessageBox.Show("数据填充完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _notificationService.ShowInformation("数据填充完成！", "成功");
                 }
                 else
                 {
                     onStatusUpdate?.Invoke("数据填充过程中出现错误！");
-                    MessageBox.Show("数据填充过程中出现错误！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning("数据填充过程中出现错误！", "错误");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"执行填充时出错: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError($"执行填充时出错: {ex.Message}", "错误");
             }
             finally
             {
@@ -92,19 +111,19 @@ namespace WordTools.Services
         {
             if (string.IsNullOrEmpty(excelPath))
             {
-                MessageBox.Show("请选择Excel文件！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请选择Excel文件！", "提示");
                 return false;
             }
 
             if (!System.IO.File.Exists(excelPath))
             {
-                MessageBox.Show("Excel文件不存在！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError("Excel文件不存在！", "错误");
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(anchorField))
             {
-                MessageBox.Show("请输入锚定字段！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入锚定字段！", "提示");
                 return false;
             }
 
@@ -138,7 +157,7 @@ namespace WordTools.Services
                     DataTable schemaTable = conn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
                     if (schemaTable == null || schemaTable.Rows.Count == 0)
                     {
-                        MessageBox.Show("Excel文件中没有工作表！", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        _notificationService.ShowError("Excel文件中没有工作表！", "错误");
                         return false;
                     }
 
@@ -154,7 +173,7 @@ namespace WordTools.Services
 
                     if (excelData.Rows.Count == 0)
                     {
-                        MessageBox.Show("Excel文件中没有数据！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        _notificationService.ShowWarning("Excel文件中没有数据！", "提示");
                         return false;
                     }
 
@@ -163,7 +182,7 @@ namespace WordTools.Services
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"读取Excel数据时出错: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError($"读取Excel数据时出错: {ex.Message}", "错误");
                 return false;
             }
         }
@@ -182,13 +201,13 @@ namespace WordTools.Services
                 // 检查是否有表格
                 if (doc.Tables.Count == 0)
                 {
-                    MessageBox.Show("文档中没有表格！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning("文档中没有表格！", "提示");
                     return false;
                 }
 
                 // 保存屏幕刷新状态并关闭（提升性能）
-                bool screenUpdatingState = Globals.ThisAddIn.Application.ScreenUpdating;
-                Globals.ThisAddIn.Application.ScreenUpdating = false;
+                bool screenUpdatingState = _appContext.ScreenUpdating;
+                _appContext.ScreenUpdating = false;
 
                 // 遍历所有表格
                 int excelRow = 0;
@@ -295,17 +314,17 @@ namespace WordTools.Services
                         diagInfo += $"  行{i + 1} 列1: {col1.Substring(0, Math.Min(30, col1.Length))} | 列2: {col2.Substring(0, Math.Min(30, col2.Length))}\n";
                     }
 
-                    MessageBox.Show(diagInfo, "锚定字段诊断", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning(diagInfo, "锚定字段诊断");
                 }
 
                 // 恢复屏幕刷新状态
-                Globals.ThisAddIn.Application.ScreenUpdating = screenUpdatingState;
+                _appContext.ScreenUpdating = screenUpdatingState;
 
                 return found;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"填充Word表格时出错: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError($"填充Word表格时出错: {ex.Message}", "错误");
                 return false;
             }
         }
@@ -540,13 +559,13 @@ namespace WordTools.Services
         {
             try
             {
-                var app = Globals.ThisAddIn.Application;
-                if (app.ActiveDocument != null)
+                var doc = _documentContext.ActiveDocument;
+                if (doc != null)
                 {
                     string fullKey = CONFIG_KEY + "_" + key;
                     // 检查变量是否存在
                     bool exists = false;
-                    foreach (Word.Variable v in app.ActiveDocument.Variables)
+                    foreach (Word.Variable v in doc.Variables)
                     {
                         if (v.Name == fullKey)
                         {
@@ -557,11 +576,11 @@ namespace WordTools.Services
 
                     if (exists)
                     {
-                        app.ActiveDocument.Variables[fullKey].Value = value;
+                        doc.Variables[fullKey].Value = value;
                     }
                     else
                     {
-                        app.ActiveDocument.Variables.Add(fullKey, value);
+                        doc.Variables.Add(fullKey, value);
                     }
                 }
             }
@@ -578,11 +597,11 @@ namespace WordTools.Services
         {
             try
             {
-                var app = Globals.ThisAddIn.Application;
-                if (app.ActiveDocument != null)
+                var doc = _documentContext.ActiveDocument;
+                if (doc != null)
                 {
                     string fullKey = CONFIG_KEY + "_" + key;
-                    foreach (Word.Variable v in app.ActiveDocument.Variables)
+                    foreach (Word.Variable v in doc.Variables)
                     {
                         if (v.Name == fullKey)
                         {

@@ -4,6 +4,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$repoRoot = $PSScriptRoot
+$versionMeta = & (Join-Path $repoRoot "sync-version.ps1")
+$appVersion = [string]$versionMeta.Version
+
 function Find-IsccPath {
     $candidates = @(
         "D:\Apps\Inno Setup 6\ISCC.exe",
@@ -29,6 +33,7 @@ function Build-Installer([string]$IsccPath, [string]$ArchitectureSwitch) {
     $arguments = @(
         "/D$ArchitectureSwitch",
         "/DSourceConfiguration=$Configuration",
+        "/DMyAppVersion=$appVersion",
         "Setup.iss"
     )
 

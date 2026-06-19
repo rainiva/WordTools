@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using WordTools.Services;
+using WordTools.Services.Abstractions;
+using WordTools.Services.Adapters;
 using Theme = WordTools.Theme;
 
 namespace WordTools.Forms
@@ -36,10 +38,17 @@ namespace WordTools.Forms
         private int FORM_WIDTH;
         private float dpiScale = 1f;
 
-        public ExcelDataFillerForm()
+        private readonly IDocumentContext _documentContext;
+        private readonly INotificationService _notificationService;
+
+        public ExcelDataFillerForm(IDocumentContext documentContext, INotificationService notificationService)
         {
+            _documentContext = documentContext;
+            _notificationService = notificationService;
             InitializeComponent();
-            fillerService = new EDF_DataFillerService();
+
+            var appContext = new WordApplicationContext(_documentContext.ActiveDocument?.Application);
+            fillerService = new EDF_DataFillerService(_documentContext, _notificationService, appContext);
         }
 
         private void InitializeComponent()
@@ -262,7 +271,7 @@ namespace WordTools.Forms
         {
             try
             {
-                return Globals.ThisAddIn.Application.ActiveDocument;
+                return _documentContext.ActiveDocument;
             }
             catch
             {
@@ -318,7 +327,7 @@ namespace WordTools.Forms
             int targetColumn;
             if (!int.TryParse(txtTargetColumn.Text.Trim(), out targetColumn))
             {
-                MessageBox.Show("请输入有效的目标列数字！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入有效的目标列数字！", "提示");
                 return;
             }
 
@@ -352,7 +361,7 @@ namespace WordTools.Forms
             catch (Exception ex)
             {
                 AppendStatus("错误: " + ex.Message);
-                MessageBox.Show(string.Format("执行出错: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError(string.Format("执行出错: {0}", ex.Message), "错误");
                 btnExecute.Enabled = true;
                 btnCancel.Enabled = true;
             }
@@ -365,28 +374,28 @@ namespace WordTools.Forms
         {
             if (string.IsNullOrWhiteSpace(txtExcelPath.Text))
             {
-                MessageBox.Show("请选择Excel文件！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请选择Excel文件！", "提示");
                 txtExcelPath.Focus();
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(txtAnchorField.Text))
             {
-                MessageBox.Show("请输入锚定字段！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入锚定字段！", "提示");
                 txtAnchorField.Focus();
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(txtTargetColumn.Text) || !int.TryParse(txtTargetColumn.Text, out int _))
             {
-                MessageBox.Show("请输入有效的目标列数字！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入有效的目标列数字！", "提示");
                 txtTargetColumn.Focus();
                 return false;
             }
 
             if (chkReplaceSampleSize.Checked && string.IsNullOrWhiteSpace(txtSampleSizeColumn.Text))
             {
-                MessageBox.Show("请输入Sample Size所在列！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入Sample Size所在列！", "提示");
                 txtSampleSizeColumn.Focus();
                 return false;
             }

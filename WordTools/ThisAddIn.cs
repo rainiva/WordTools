@@ -136,7 +136,8 @@ namespace WordTools
 
         public bool GetBenchmarkLoggingEnabled(Office.IRibbonControl control)
         {
-            return ConfigService.GetDetailedLoggingEnabled();
+            return ConfigService.GetDetailedLoggingEnabled()
+                && ConfigService.GetBenchmarkLoggingEnabled();
         }
 
         #region 按钮点击回调
@@ -196,9 +197,7 @@ namespace WordTools
         public void OnAboutClick(Office.IRibbonControl control)
         {
             MessageBox.Show(
-                "Word工具箱 v1.0\n\n" +
-                "功能：批量插图、自动编号\n\n" +
-                "© 2026",
+                AppVersionInfo.AboutMessage,
                 "关于",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -244,7 +243,10 @@ namespace WordTools
                         Application.StatusBar = status;
                         System.Windows.Forms.Application.DoEvents();
                     }
-                    catch { }
+                    catch (COMException)
+                    {
+                        // Word 可能处于繁忙或关闭状态，忽略状态栏更新失败
+                    }
                 });
 
                 // 确保域代码不可见
@@ -253,7 +255,10 @@ namespace WordTools
                     if (doc.ActiveWindow.View.ShowFieldCodes)
                         doc.ActiveWindow.View.ShowFieldCodes = false;
                 }
-                catch { }
+                catch (COMException)
+                {
+                    // 视图对象可能暂时不可用，不影响编号结果
+                }
 
                 Application.StatusBar = "";
                 // 确保UI完全刷新后再显示提示框
@@ -283,8 +288,13 @@ namespace WordTools
         {
             try
             {
-                Forms.ExcelDataFillerForm form = new Forms.ExcelDataFillerForm();
-                form.ShowDialog();
+                var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
+                var documentContext = new Services.Adapters.WordDocumentContext(appContext);
+                var notificationService = new Services.Adapters.MessageBoxNotificationService();
+                using (var form = new Forms.ExcelDataFillerForm(documentContext, notificationService))
+                {
+                    form.ShowDialog();
+                }
             }
             catch (Exception ex)
             {
@@ -335,7 +345,24 @@ namespace WordTools
                 return;
             }
 
-            var progressService = new ProgressService(Globals.Application);
+            var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
+            var notificationService = new Services.Adapters.MessageBoxNotificationService();
+            var failureDetailsPresenter = new Services.Adapters.FailureDetailsFormAdapter();
+
+            int totalFiles = request.Mode == InsertPhotosRequestMode.Folder
+                ? Services.FileService.CountTotalImageFiles(
+                    request.FolderPath,
+                    request.IncludeRootImages,
+                    request.IncludeSubFolderImages)
+                : (request.SelectedFiles?.Length ?? 0);
+
+            var progressReporter = new Services.Adapters.ProgressFormAdapter(totalFiles);
+            var progressService = new Services.ProgressService(
+                appContext,
+                progressReporter,
+                failureDetailsPresenter,
+                notificationService);
+
             if (request.Mode == InsertPhotosRequestMode.Folder)
             {
                 progressService.InsertPhotosWithProgress(
@@ -370,19 +397,29 @@ namespace WordTools
                 return;
             }
 
-            var invoker = new Control();
-            invoker.CreateControl();
-            invoker.BeginInvoke(new Action(() =>
+            // 使用一次性 Timer 在消息循环的下一周期调度插入操作。
+            // 这样可以确保模态对话框已完全关闭，避免在对话框句柄仍有效时操作 Word。
+            var timer = new System.Windows.Forms.Timer { Interval = 1 };
+            timer.Tick += (sender, e) =>
             {
+                timer.Stop();
+                timer.Dispose();
+
                 try
                 {
                     ExecuteInsertPhotosRequest(request);
                 }
-                finally
+                catch (Exception ex)
                 {
-                    invoker.Dispose();
+                    MessageBox.Show(
+                        "批量插图失败: " + ex.Message,
+                        "错误",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
                 }
-            }));
+            };
+
+            timer.Start();
         }
 
         #endregion

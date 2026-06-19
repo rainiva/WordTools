@@ -34,7 +34,7 @@ Word工具箱是一个 Word COM 加载项，安装后在 Word 功能区新增"Wo
 ### 方式一：安装包（推荐）
 
 1. 完全关闭 Microsoft Word（包括后台进程）
-2. 运行 `x64 安装包` 中的 `WordToolbox_Setup.exe`
+2. 运行 `Output/WordToolbox_Setup_x64.exe`
 3. 按安装向导完成安装
 4. 重新打开 Word，确认功能区出现"Word工具箱"选项卡
 
@@ -73,7 +73,6 @@ msbuild WordTools.sln /p:Configuration=Release
 ### 运行测试
 
 ```batch
-cd WordTools.Tests
 dotnet test
 ```
 
@@ -126,7 +125,7 @@ WordTools/
 | `build.bat` | 自动查找 MSBuild，构建 Release 配置，生成强名称密钥，执行 NGen 预编译 |
 | `RegisterPlugin.ps1` | PowerShell 注册脚本，自动检测架构，仅支持 64 位 Word |
 | `RegisterPlugin.bat` | `RegisterPlugin.ps1` 的批处理入口 |
-| `build-installer.ps1` | 调用 Inno Setup 编译器构建 x86/x64 双架构安装包 |
+| `build-installer.ps1` | 调用 Inno Setup 编译器构建安装包（x64 为正式包，x86 仅用于不支持提示） |
 
 ## 已知限制
 
@@ -140,7 +139,7 @@ WordTools/
 - **目标框架**：.NET Framework 4.8
 - **Office 集成**：Microsoft.Office.Interop.Word（PIA，嵌入互操作类型）
 - **UI 框架**：Windows Forms + 自定义 Ribbon XML
-- **测试框架**：.NET 8.0 + MSTest
+- **测试框架**：.NET 8.0 + xUnit
 - **安装包**：Inno Setup 6
 
 ## 许可证

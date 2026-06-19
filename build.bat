@@ -18,7 +18,14 @@ if exist "%VSWHERE%" (
 )
 
 :: 方法2: 检查常见位置的 MSBuild
-if exist "%ProgramFiles%\Microsoft Visual Studio\2026\Community\MSBuild\Current\Bin\MSBuild.exe" (
+if not "%MSBUILD_CUSTOM%"=="" (
+    if exist "%MSBUILD_CUSTOM%" (
+        set "MSBUILD_PATH=%MSBUILD_CUSTOM%"
+        goto :found
+    )
+) else if exist "D:\Apps\Visual Studio\MSBuild\Current\Bin\MSBuild.exe" (
+    set "MSBUILD_PATH=D:\Apps\Visual Studio\MSBuild\Current\Bin\MSBuild.exe"
+) else if exist "%ProgramFiles%\Microsoft Visual Studio\2026\Community\MSBuild\Current\Bin\MSBuild.exe" (
     set "MSBUILD_PATH=%ProgramFiles%\Microsoft Visual Studio\2026\Community\MSBuild\Current\Bin\MSBuild.exe"
 ) else if exist "%ProgramFiles%\Microsoft Visual Studio\2026\Professional\MSBuild\Current\Bin\MSBuild.exe" (
     set "MSBUILD_PATH=%ProgramFiles%\Microsoft Visual Studio\2026\Professional\MSBuild\Current\Bin\MSBuild.exe"
@@ -63,8 +70,16 @@ if "%MSBUILD_PATH%"=="" (
 
 echo 找到 MSBuild: %MSBUILD_PATH%
 
+echo [1/6] 同步版本号...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0sync-version.ps1"
+if %errorlevel% neq 0 (
+    echo 版本同步失败！
+    pause
+    exit /b 1
+)
+
 :: 生成强名称密钥
-echo [1/4] 生成强名称密钥...
+echo [2/6] 生成强名称密钥...
 if not exist "WordTools\Key.snk" (
     "%MSBUILD_PATH:\MSBuild.exe=\..\..\sn.exe%" -k "WordTools\Key.snk" 2>nul
     if %errorlevel% neq 0 (
@@ -84,14 +99,14 @@ if not exist "WordTools\Key.snk" (
 )
 
 echo.
-echo [2/4] 还原 NuGet 包...
+echo [3/6] 还原 NuGet 包...
 nuget restore WordTools.sln 2>nul
 if %errorlevel% neq 0 (
     echo 警告: NuGet 还原失败，尝试继续构建...
 )
 
 echo.
-echo [3/4] 构建解决方案 (Release)...
+echo [4/6] 构建解决方案 (Release)...
 "%MSBUILD_PATH%" WordTools.sln /p:Configuration=Release /p:Platform="Any CPU" /verbosity:minimal
 if %errorlevel% neq 0 (
     echo.
@@ -101,16 +116,14 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [4/5] 复制部署文件...
+echo [5/6] 复制部署文件...
 if not exist "WordTools\bin\Release\publish" mkdir "WordTools\bin\Release\publish"
 copy "WordTools\bin\Release\WordTools.dll" "WordTools\bin\Release\publish\" >nul
 copy "WordTools\bin\Release\WordTools.pdb" "WordTools\bin\Release\publish\" >nul
-copy "WordTools\bin\Release\WordTools.dll.manifest" "WordTools\bin\Release\publish\" >nul
-copy "WordTools\WordTools.vsto" "WordTools\bin\Release\publish\" >nul
 echo 部署文件已复制到 publish 目录
 
 echo.
-echo [5/5] NGen 预编译...
+echo [6/6] NGen 预编译...
 set NGEN_PATH=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\ngen.exe
 if exist "%NGEN_PATH%" (
     "%NGEN_PATH%" install "WordTools\bin\Release\WordTools.dll"
@@ -133,7 +146,7 @@ echo   - 插件文件: WordTools\bin\Release\
 echo   - 部署文件: WordTools\bin\Release\publish\
 echo.
 echo 安装方法:
-echo   方法1: 直接运行 WordTools.vsto
+echo   方法1: 运行 Output\WordToolbox_Setup_x64.exe
 echo   方法2: 在 Word 中手动添加 COM 加载项
 echo.
 pause

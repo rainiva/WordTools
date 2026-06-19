@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Word;
 using WordTools.Forms;
+using WordTools.Services.Abstractions;
+using WordTools.Services.Adapters;
 using Application = Microsoft.Office.Interop.Word.Application;
 
 namespace WordTools.Services
@@ -32,7 +34,10 @@ namespace WordTools.Services
         private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_SHOWWINDOW = 0x0040;
 
-        private readonly Application _application;
+        private readonly IWordApplicationContext _appContext;
+        private readonly IProgressReporter _progressReporter;
+        private readonly IFailureDetailsPresenter _failureDetailsPresenter;
+        private readonly INotificationService _notificationService;
         private bool _isCancelled;
 
         // 批量处理配置
@@ -48,13 +53,18 @@ namespace WordTools.Services
         private bool _originalScreenUpdating;
         private bool _originalDisplayAlerts;
 
-        // 进度窗口
-        private ProgressForm _progressForm;
         private InsertionPerformanceDiagnostics _activeDiagnostics;
 
-        public ProgressService(Application application)
+        public ProgressService(
+            IWordApplicationContext appContext,
+            IProgressReporter progressReporter,
+            IFailureDetailsPresenter failureDetailsPresenter,
+            INotificationService notificationService)
         {
-            _application = application;
+            _appContext = appContext ?? throw new ArgumentNullException(nameof(appContext));
+            _progressReporter = progressReporter;
+            _failureDetailsPresenter = failureDetailsPresenter;
+            _notificationService = notificationService;
         }
 
         #region 取消控制
@@ -75,7 +85,7 @@ namespace WordTools.Services
             if (_isCancelled) return true;
 
             // 检查进度窗口是否点击了取消
-            if (_progressForm != null && !_progressForm.IsDisposed && _progressForm.IsCancelled)
+            if (_progressReporter?.IsCancelled == true)
             {
                 _isCancelled = true;
                 return true;
@@ -84,8 +94,8 @@ namespace WordTools.Services
             if (CheckEscapeKey())
             {
                 _isCancelled = true;
-                _application.StatusBar = "检测到 ESC 键，正在取消操作...";
-                System.Windows.Forms.Application.DoEvents();
+                _appContext.Application.StatusBar = "检测到 ESC 键，正在取消操作...";
+                _appContext.DoEvents();
                 return true;
             }
 
@@ -103,14 +113,14 @@ namespace WordTools.Services
         {
             try
             {
-                _originalScreenUpdating = _application.ScreenUpdating;
-                _originalDisplayAlerts = _application.DisplayAlerts != WdAlertLevel.wdAlertsNone;
+                _originalScreenUpdating = _appContext.Application.ScreenUpdating;
+                _originalDisplayAlerts = _appContext.Application.DisplayAlerts != WdAlertLevel.wdAlertsNone;
 
                 // 关闭 ScreenUpdating 以提升插图性能（进度由独立窗口显示）
-                _application.ScreenUpdating = false;
-                _application.DisplayAlerts = WdAlertLevel.wdAlertsNone;
+                _appContext.Application.ScreenUpdating = false;
+                _appContext.Application.DisplayAlerts = WdAlertLevel.wdAlertsNone;
 
-                var doc = _application.ActiveDocument;
+                var doc = _appContext.Application.ActiveDocument;
                 if (doc != null)
                 {
                     doc.SpellingChecked = true;
@@ -130,8 +140,8 @@ namespace WordTools.Services
         {
             try
             {
-                _application.ScreenUpdating = _originalScreenUpdating;
-                _application.DisplayAlerts = _originalDisplayAlerts 
+                _appContext.Application.ScreenUpdating = _originalScreenUpdating;
+                _appContext.Application.DisplayAlerts = _originalDisplayAlerts 
                     ? WdAlertLevel.wdAlertsAll 
                     : WdAlertLevel.wdAlertsNone;
             }
@@ -170,7 +180,7 @@ namespace WordTools.Services
         {
             try
             {
-                System.Windows.Forms.Application.DoEvents();
+                _appContext.DoEvents();
 
                 // 内存水位检查：超过 500MB 时强制全代回收
                 if (GC.GetTotalMemory(false) > 500 * 1024 * 1024)
@@ -232,16 +242,16 @@ namespace WordTools.Services
             try
             {
                 // 验证表格
-                var selection = _application.Selection;
+                var selection = _appContext.Application.Selection;
                 if (!TableService.IsSelectionInTable(selection))
                 {
-                    MessageBox.Show("请先选中一个表格！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning("请先选中一个表格！", "提示");
                     return;
                 }
 
                 if (!TableService.IsSelectionInFirstColumn(selection))
                 {
-                    MessageBox.Show("请将光标置于表格左侧单元格！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning("请将光标置于表格左侧单元格！", "提示");
                     return;
                 }
 
@@ -280,7 +290,7 @@ namespace WordTools.Services
                             needClearNumbering = true;
                         }
                     }
-                    catch { needClearNumbering = true; } // 出错时保守处理，执行清理
+                    catch (Exception ex) { SafeIgnore(ex, "检测起始行内容失败，保守清理编号"); needClearNumbering = true; } // 出错时保守处理，执行清理
                 }
                 
                 if (needClearNumbering)
@@ -299,15 +309,15 @@ namespace WordTools.Services
 
                 if (totalFiles == 0)
                 {
-                    MessageBox.Show("未找到任何图片文件！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning("未找到任何图片文件！", "提示");
                     return;
                 }
 
                 // 仅在图片数量较多时显示开始提示
                 if (totalFiles > 20)
                 {
-                    MessageBox.Show(string.Format("开始插入图片...\n\n提示：插入过程中可以按 ESC 键随时取消操作。\n\n共找到 {0} 张图片。", totalFiles),
-                        "批量插图", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _notificationService?.ShowInformation(string.Format("开始插入图片...\n\n提示：插入过程中可以按 ESC 键随时取消操作。\n\n共找到 {0} 张图片。", totalFiles),
+                        "批量插图");
                 }
 
                 // 设置优化参数
@@ -321,9 +331,8 @@ namespace WordTools.Services
                 EnterHighPerformanceMode();
 
                 // 创建并显示进度窗口
-                _progressForm = new ProgressForm(totalFiles);
-                _progressForm.Show();
-                System.Windows.Forms.Application.DoEvents();
+                _progressReporter?.Show();
+                _appContext.DoEvents();
 
                 // 编号准备
                 WdParagraphAlignment wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter;
@@ -343,7 +352,7 @@ namespace WordTools.Services
                 int currentNumber = startNumber;
 
                 // 预分配行数
-                ImageService.PreAllocateRows(tbl, totalFiles, 2, needDescription, _application);
+                ImageService.PreAllocateRows(tbl, totalFiles, 2, needDescription, _appContext.Application);
                 t3 = sw.ElapsedMilliseconds;
 
                 // 进度窗口已显示，无需额外状态栏提示
@@ -416,16 +425,12 @@ namespace WordTools.Services
                     insertionDiagnostics);
 
                 // 更新进度窗口为完成状态
-                if (_progressForm != null && !_progressForm.IsDisposed)
-                {
-                    CloseProgressForm();
-                }
+                CloseProgressForm();
 
                 if (_isCancelled)
                 {
                     benchmarkStatus = "Cancelled";
-                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示");
                 }
                 else if (InsertionSummaryFormatter.ShouldShowSummary(failCount, mergedCellRows, overwriteWarnings))
                 {
@@ -434,16 +439,14 @@ namespace WordTools.Services
                 }
                 else
                 {
-                    MessageBox.Show(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo) + timeDetail, "完成",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _notificationService?.ShowInformation(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo) + timeDetail, "完成");
                 }
             }
             catch (Exception ex)
             {
                 benchmarkStatus = "Error";
                 benchmarkError = ex.Message;
-                MessageBox.Show(string.Format("处理过程中发生错误: {0}", ex.Message), "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService?.ShowError(string.Format("处理过程中发生错误: {0}", ex.Message), "错误");
             }
             finally
             {
@@ -475,30 +478,27 @@ namespace WordTools.Services
                 {
                     for (int i = 0; i < 10; i++)
                     {
-                        System.Windows.Forms.Application.DoEvents();
+                        _appContext.DoEvents();
                         System.Threading.Thread.Sleep(10);
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "等待 Word 完成消息处理失败"); }
 
                 // 3. 确保域代码不可见（保持原有逻辑不变）
                 try
                 {
-                    if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
+                    if (_appContext.Application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
                     {
-                        _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
-                        System.Windows.Forms.Application.DoEvents();
+                        _appContext.Application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
+                        _appContext.DoEvents();
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "隐藏域代码失败"); }
 
                 // 关闭进度窗口
-                if (_progressForm != null && !_progressForm.IsDisposed)
-                {
-                    CloseProgressForm();
-                }
+                CloseProgressForm();
 
-                _application.StatusBar = "";
+                _appContext.Application.StatusBar = "";
 
                 TryWriteBenchmarkLog(new BenchmarkLogEntry
                 {
@@ -585,16 +585,16 @@ namespace WordTools.Services
             try
             {
                 // 验证表格
-                var selection = _application.Selection;
+                var selection = _appContext.Application.Selection;
                 if (!TableService.IsSelectionInTable(selection))
                 {
-                    MessageBox.Show("请先选中一个表格！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning("请先选中一个表格！", "提示");
                     return;
                 }
 
                 if (!TableService.IsSelectionInFirstColumn(selection))
                 {
-                    MessageBox.Show("请将光标置于表格左侧单元格！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning("请将光标置于表格左侧单元格！", "提示");
                     return;
                 }
 
@@ -639,7 +639,7 @@ namespace WordTools.Services
                         // 注意：不再遍历 tbl.Range.InlineShapes 检查后续行，该操作在大表格中极慢（5-6 秒）
                         // 如果用户从中间插入，需要清理编号，可通过其他方式检测（如检查描述行是否有编号文本）
                     }
-                    catch { needClearNumbering = true; } // 出错时保守处理，执行清理
+                    catch (Exception ex) { SafeIgnore(ex, "检测起始行内容失败，保守清理编号"); needClearNumbering = true; } // 出错时保守处理，执行清理
                 }
                 
                 if (needClearNumbering)
@@ -655,9 +655,8 @@ namespace WordTools.Services
                 EnterHighPerformanceMode();
 
                 // 创建并显示进度窗口（独立于 Word，不受 ScreenUpdating 影响）
-                _progressForm = new ProgressForm(totalFiles);
-                _progressForm.Show();
-                System.Windows.Forms.Application.DoEvents();
+                _progressReporter?.Show();
+                _appContext.DoEvents();
 
                 // 编号准备
                 WdParagraphAlignment wdAlignment = WdParagraphAlignment.wdAlignParagraphCenter;
@@ -704,16 +703,12 @@ namespace WordTools.Services
                     insertionDiagnostics);
 
                 // 更新进度窗口为完成状态
-                if (_progressForm != null && !_progressForm.IsDisposed)
-                {
-                    CloseProgressForm();
-                }
+                CloseProgressForm();
 
                 if (_isCancelled)
                 {
                     benchmarkStatus = "Cancelled";
-                    MessageBox.Show(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService?.ShowWarning(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示");
                 }
                 else if (InsertionSummaryFormatter.ShouldShowSummary(failCount, mergedCellRows, overwriteWarnings))
                 {
@@ -722,16 +717,14 @@ namespace WordTools.Services
                 }
                 else
                 {
-                    MessageBox.Show(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo) + timeDetail, "完成",
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _notificationService?.ShowInformation(string.Format("成功插入 {0} 张图片！\n耗时: {1}", successCount, timeInfo) + timeDetail, "完成");
                 }
             }
             catch (Exception ex)
             {
                 benchmarkStatus = "Error";
                 benchmarkError = ex.Message;
-                MessageBox.Show(string.Format("处理过程中发生错误: {0}", ex.Message), "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService?.ShowError(string.Format("处理过程中发生错误: {0}", ex.Message), "错误");
             }
             finally
             {
@@ -763,30 +756,27 @@ namespace WordTools.Services
                 {
                     for (int i = 0; i < 10; i++)
                     {
-                        System.Windows.Forms.Application.DoEvents();
+                        _appContext.DoEvents();
                         System.Threading.Thread.Sleep(10);
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "等待 Word 完成消息处理失败"); }
 
                 // 3. 确保域代码不可见（保持原有逻辑不变）
                 try
                 {
-                    if (_application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
+                    if (_appContext.Application.ActiveDocument.ActiveWindow.View.ShowFieldCodes)
                     {
-                        _application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
-                        System.Windows.Forms.Application.DoEvents();
+                        _appContext.Application.ActiveDocument.ActiveWindow.View.ShowFieldCodes = false;
+                        _appContext.DoEvents();
                     }
                 }
-                catch { }
+                catch (Exception ex) { SafeIgnore(ex, "隐藏域代码失败"); }
 
                 // 关闭进度窗口
-                if (_progressForm != null && !_progressForm.IsDisposed)
-                {
-                    CloseProgressForm();
-                }
+                CloseProgressForm();
 
-                _application.StatusBar = "";
+                _appContext.Application.StatusBar = "";
 
                 TryWriteBenchmarkLog(new BenchmarkLogEntry
                 {
@@ -880,7 +870,7 @@ namespace WordTools.Services
                 {
                     UpdateStatusBar(processedCount, totalFiles, fileName, startTime);
                     // 处理消息队列，确保进度窗口 UI 更新
-                    System.Windows.Forms.Application.DoEvents();
+                    _appContext.DoEvents();
                 }
 
                 try
@@ -1013,7 +1003,7 @@ namespace WordTools.Services
                                     for (int col = 1; col <= 2; col++)
                                     {
                                         try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
-                                        catch { }
+                                        catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                                         currentNumber++;
                                     }
                                 }
@@ -1036,7 +1026,7 @@ namespace WordTools.Services
                                     for (int col = 1; col <= 2; col++)
                                     {
                                         try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
-                                        catch { }
+                                        catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                                         currentNumber++;
                                     }
                                 }
@@ -1132,7 +1122,7 @@ namespace WordTools.Services
                     for (int col = 1; col <= 2; col++)
                     {
                         try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
-                        catch { }
+                        catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                         currentNumber++; // 每列递增
                     }
                 }
@@ -1155,7 +1145,7 @@ namespace WordTools.Services
                     for (int col = 1; col <= 2; col++)
                     {
                         try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
-                        catch { }
+                        catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                         currentNumber++; // 每列递增
                     }
                 }
@@ -1204,12 +1194,9 @@ namespace WordTools.Services
                     : currentFile;
 
                 // 更新进度窗口（独立于 Word，不受 ScreenUpdating 影响）
-                if (_progressForm != null && !_progressForm.IsDisposed)
-                {
-                    _progressForm.UpdateProgress(current, total, shortFileName, elapsed);
-                    // 确保进度窗口保持置顶
-                    EnsureWindowTopMost(_progressForm.Handle);
-                }
+                _progressReporter?.UpdateProgress(current, total, shortFileName, elapsed);
+                // 确保进度窗口保持置顶
+                EnsureWindowTopMost(_progressReporter?.Handle ?? IntPtr.Zero);
 
                 // 进度由独立窗口显示，不再更新 Word 状态栏
             }
@@ -1239,7 +1226,7 @@ namespace WordTools.Services
                     SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
                 }
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "设置窗口置顶失败"); }
         }
 
         /// <summary>
@@ -1249,12 +1236,12 @@ namespace WordTools.Services
         {
             try
             {
-                if (_application != null && _application.ActiveWindow != null)
+                if (_appContext.Application != null && _appContext.Application.ActiveWindow != null)
                 {
-                    _application.ActiveWindow.Activate();
+                    _appContext.Application.ActiveWindow.Activate();
                 }
             }
-            catch { }
+            catch (Exception ex) { SafeIgnore(ex, "激活 Word 窗口失败"); }
         }
 
         #endregion
@@ -1444,20 +1431,22 @@ namespace WordTools.Services
                 summaryText += Environment.NewLine + Environment.NewLine + InsertionSummaryFormatter.BuildDetailsPrompt();
             }
 
-            MessageBoxButtons buttons = showDetails ? MessageBoxButtons.YesNo : MessageBoxButtons.OK;
-            var result = MessageBox.Show(
-                summaryText,
-                "插图完成",
-                buttons,
-                MessageBoxIcon.Information,
-                showDetails ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1);
-
-            if (result == DialogResult.Yes && showDetails)
+            if (showDetails)
             {
-                using (var detailsForm = new FailureDetailsForm(failedFiles, mergedCellRows, overwriteWarnings))
+                var result = _notificationService?.ShowQuestion(
+                    summaryText,
+                    "插图完成",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (result == DialogResult.Yes)
                 {
-                    detailsForm.ShowDialog();
+                    _failureDetailsPresenter?.ShowDetails(summaryText, failedFiles, mergedCellRows, overwriteWarnings);
                 }
+            }
+            else
+            {
+                _notificationService?.ShowInformation(summaryText, "插图完成");
             }
         }
 
@@ -1557,17 +1546,22 @@ namespace WordTools.Services
                 buttons = MessageBoxButtons.YesNo;
             }
 
-            var result = MessageBox.Show(sb.ToString(), "插图完成",
-                buttons,
-                MessageBoxIcon.Information,
-                buttons == MessageBoxButtons.YesNo ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1);
-
-            if (result == DialogResult.Yes && (hasMoreFailures || hasMoreMerged))
+            if (buttons == MessageBoxButtons.YesNo)
             {
-                using (var detailsForm = new FailureDetailsForm(failedFiles, mergedCellRows))
+                var result = _notificationService?.ShowQuestion(
+                    sb.ToString(),
+                    "插图完成",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if (result == DialogResult.Yes)
                 {
-                    detailsForm.ShowDialog();
+                    _failureDetailsPresenter?.ShowDetails(sb.ToString(), failedFiles, mergedCellRows, null);
                 }
+            }
+            else
+            {
+                _notificationService?.ShowInformation(sb.ToString(), "插图完成");
             }
         }
 
@@ -1598,23 +1592,20 @@ namespace WordTools.Services
 
             if (mergedCellRows.Count > previewCount)
             {
-                var result = MessageBox.Show(sb.ToString(), "合并单元格提示",
+                var result = _notificationService?.ShowQuestion(
+                    sb.ToString(),
+                    "合并单元格提示",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning,
-                    MessageBoxDefaultButton.Button2);
+                    MessageBoxIcon.Warning);
 
                 if (result == DialogResult.Yes)
                 {
-                    using (var detailsForm = new FailureDetailsForm(null, mergedCellRows))
-                    {
-                        detailsForm.ShowDialog();
-                    }
+                    _failureDetailsPresenter?.ShowDetails(sb.ToString(), null, mergedCellRows, null);
                 }
             }
             else
             {
-                MessageBox.Show(sb.ToString(), "合并单元格提示",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService?.ShowWarning(sb.ToString(), "合并单元格提示");
             }
         }
 
@@ -1645,23 +1636,20 @@ namespace WordTools.Services
 
             if (overwriteWarnings.Count > previewCount)
             {
-                var result = MessageBox.Show(sb.ToString(), "覆盖插图提示",
+                var result = _notificationService?.ShowQuestion(
+                    sb.ToString(),
+                    "覆盖插图提示",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning,
-                    MessageBoxDefaultButton.Button2);
+                    MessageBoxIcon.Warning);
 
                 if (result == DialogResult.Yes)
                 {
-                    using (var detailsForm = new FailureDetailsForm(null, null, overwriteWarnings))
-                    {
-                        detailsForm.ShowDialog();
-                    }
+                    _failureDetailsPresenter?.ShowDetails(sb.ToString(), null, null, overwriteWarnings);
                 }
             }
             else
             {
-                MessageBox.Show(sb.ToString(), "覆盖插图提示",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService?.ShowWarning(sb.ToString(), "覆盖插图提示");
             }
         }
 
@@ -1679,8 +1667,8 @@ namespace WordTools.Services
                 string documentPath = null;
                 try
                 {
-                    documentPath = _application != null && _application.ActiveDocument != null
-                        ? _application.ActiveDocument.FullName
+                    documentPath = _appContext.Application != null && _appContext.Application.ActiveDocument != null
+                        ? _appContext.Application.ActiveDocument.FullName
                         : null;
                 }
                 catch
@@ -1701,26 +1689,19 @@ namespace WordTools.Services
 
         private void CloseProgressForm()
         {
-            if (_progressForm == null)
-            {
-                return;
-            }
-
             try
             {
-                if (!_progressForm.IsDisposed)
-                {
-                    _progressForm.TopMost = false;
-                    _progressForm.Close();
-                }
+                _progressReporter?.Close();
             }
-            catch
+            catch (Exception ex)
             {
+                SafeIgnore(ex, "关闭进度窗口失败");
             }
-            finally
-            {
-                _progressForm = null;
-            }
+        }
+
+        private static void SafeIgnore(Exception ex, string context)
+        {
+            Debug.WriteLine($"{context}: {ex.Message}");
         }
 
         #endregion
