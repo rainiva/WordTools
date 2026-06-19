@@ -47,7 +47,17 @@ namespace WordTools.Services.Adapters
             _form?.ShowCompletion(successCount, failCount, totalSeconds);
         }
 
-        public bool IsCancelled => _form != null && !_form.IsDisposed && _form.IsCancelled;
+        public bool IsCancelled
+        {
+            get
+            {
+                if (_form != null && !_form.IsDisposed)
+                {
+                    return _form.IsCancelled || _form.IsCloseRequestedByUser;
+                }
+                return false;
+            }
+        }
 
         public IntPtr Handle => _form != null && !_form.IsDisposed ? _form.Handle : IntPtr.Zero;
 

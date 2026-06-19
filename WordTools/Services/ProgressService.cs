@@ -145,9 +145,9 @@ namespace WordTools.Services
                     ? WdAlertLevel.wdAlertsAll 
                     : WdAlertLevel.wdAlertsNone;
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                SafeIgnore(ex, "退出高性能模式失败");
             }
         }
 
@@ -200,9 +200,9 @@ namespace WordTools.Services
                     GC.Collect(0);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                SafeIgnore(ex, "清理内存失败");
             }
         }
 
@@ -313,11 +313,20 @@ namespace WordTools.Services
                     return;
                 }
 
-                // 仅在图片数量较多时显示开始提示
+                // 仅在图片数量较多时显示开始提示，并让用户有机会取消
                 if (totalFiles > 20)
                 {
-                    _notificationService?.ShowInformation(string.Format("开始插入图片...\n\n提示：插入过程中可以按 ESC 键随时取消操作。\n\n共找到 {0} 张图片。", totalFiles),
-                        "批量插图");
+                    var confirmResult = _notificationService?.ShowQuestion(
+                        string.Format("开始插入图片...\n\n提示：插入过程中可以按 ESC 键随时取消操作。\n\n共找到 {0} 张图片。", totalFiles),
+                        "批量插图",
+                        MessageBoxButtons.OKCancel,
+                        MessageBoxIcon.Information) ?? DialogResult.OK;
+
+                    if (confirmResult != DialogResult.OK)
+                    {
+                        _isCancelled = true;
+                        return;
+                    }
                 }
 
                 // 设置优化参数
@@ -1200,9 +1209,9 @@ namespace WordTools.Services
 
                 // 进度由独立窗口显示，不再更新 Word 状态栏
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                SafeIgnore(ex, "更新进度窗口失败");
             }
             finally
             {
@@ -1671,8 +1680,9 @@ namespace WordTools.Services
                         ? _appContext.Application.ActiveDocument.FullName
                         : null;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    SafeIgnore(ex, "获取文档路径失败");
                     documentPath = null;
                 }
 
@@ -1681,9 +1691,10 @@ namespace WordTools.Services
                 entry.LogPath = logPath;
                 BenchmarkLogService.AppendCsv(logPath, entry);
             }
-            catch
+            catch (Exception ex)
             {
                 // 基准日志仅用于开发调试，禁止影响主流程
+                SafeIgnore(ex, "写入基准日志失败");
             }
         }
 

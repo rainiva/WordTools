@@ -76,9 +76,9 @@ namespace WordTools.Services
                     if (rowIdx < 1 || colIdx < 1)
                         return ImageCellAvailability.Blocked;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 合并单元格通常无法正确获取索引
+                    Debug.WriteLine($"[TableService] GetImageCellAvailability index access error: {ex.Message}");
                     return ImageCellAvailability.Blocked;
                 }
 
@@ -118,9 +118,9 @@ namespace WordTools.Services
                         r.SetRange(r.Start, r.End - 1);
                         r.Text = "";
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // 清除失败则不适合插入
+                        Debug.WriteLine($"[TableService] GetImageCellAvailability clear numbering error: {ex.Message}");
                         return ImageCellAvailability.Blocked;
                     }
                     return ImageCellAvailability.Available;
@@ -144,9 +144,9 @@ namespace WordTools.Services
                     {
                         targetCell.Range.Text = "";
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // 清除失败则不适合插入
+                        Debug.WriteLine($"[TableService] GetImageCellAvailability clear number text error: {ex.Message}");
                         return ImageCellAvailability.Blocked;
                     }
                     return ImageCellAvailability.Available;
@@ -154,8 +154,9 @@ namespace WordTools.Services
 
                 return ImageCellAvailability.OverwriteText;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] GetImageCellAvailability error: {ex.Message}");
                 return ImageCellAvailability.Blocked;
             }
             finally
@@ -197,9 +198,9 @@ namespace WordTools.Services
                     {
                         col1Suitable = IsCellSuitableForImage(tbl.Cell(row, 1));
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // 合并单元格或索引越界时跳过
+                        Debug.WriteLine($"[TableService] FindNextAvailableImageCell col1 check error: {ex.Message}");
                         col1Suitable = false;
                     }
 
@@ -214,8 +215,9 @@ namespace WordTools.Services
                         {
                             col2Suitable = IsCellSuitableForImage(tbl.Cell(row, 2));
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            Debug.WriteLine($"[TableService] FindNextAvailableImageCell col2 check error: {ex.Message}");
                             col2Suitable = false;
                         }
                     }
@@ -255,9 +257,9 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] FindNextAvailableImageCell error: {ex.Message}");
             }
 
             return false;
@@ -275,8 +277,9 @@ namespace WordTools.Services
 
                 return index.HasShapeInRange(cellRange.Start, cellRange.End);
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] HasFloatingShapeInCell error: {ex.Message}");
             }
             finally
             {
@@ -308,8 +311,9 @@ namespace WordTools.Services
                         anchors.Add(new FloatingShapeAnchor(shape.Anchor.Start, shape.Anchor.End));
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Debug.WriteLine($"[TableService] BuildFloatingShapeIndex iteration error: {ex.Message}");
                 }
             }
 
@@ -357,8 +361,9 @@ namespace WordTools.Services
 
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] IsMergedCell error: {ex.Message}");
                 mergeTopRow = row;
                 mergeLeftCol = col;
                 return true;
@@ -383,8 +388,9 @@ namespace WordTools.Services
                 }
                 return span;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] GetMergedRowSpan error: {ex.Message}");
                 return 1;
             }
         }
@@ -411,8 +417,9 @@ namespace WordTools.Services
                 ImageRowAvailability rowAvailability = GetImageRowAvailability(tbl, row, context);
                 return col == 1 ? rowAvailability.LeftCell : rowAvailability.RightCell;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] GetCellAvailability error: {ex.Message}");
                 return ImageCellAvailability.Blocked;
             }
         }
@@ -545,8 +552,9 @@ namespace WordTools.Services
             {
                 return GetCellAvailability(tbl.Cell(row, col), context);
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] GetCellAvailabilityCore error: {ex.Message}");
                 return ImageCellAvailability.Merged;
             }
         }
@@ -575,9 +583,9 @@ namespace WordTools.Services
                     cachedRowCount = tbl.Rows.Count;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] EnsureRowExists (cached) error: {ex.Message}");
             }
         }
 
@@ -604,9 +612,9 @@ namespace WordTools.Services
                 // 确保有2列
                 AdjustTableColumns(tbl, 2);
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] EnsureRowExists error: {ex.Message}");
             }
         }
 
@@ -638,9 +646,9 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] AdjustTableColumns error: {ex.Message}");
             }
         }
 
@@ -654,8 +662,9 @@ namespace WordTools.Services
             {
                 return !tbl.AllowAutoFit;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[TableService] IsTableFixedColumnWidth error: {ex.Message}");
                 return false;
             }
         }
@@ -670,9 +679,9 @@ namespace WordTools.Services
             {
                 tbl.AllowAutoFit = false;
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] SetTableFixedColumnWidth error: {ex.Message}");
             }
         }
 
@@ -707,9 +716,9 @@ namespace WordTools.Services
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 忽略错误
+                    Debug.WriteLine($"[TableService] CreateTitleRow empty check error: {ex.Message}");
                 }
 
                 // 如果当前行不为空，插入新行
@@ -732,9 +741,9 @@ namespace WordTools.Services
                 // 移动到下一行
                 rowIndex++;
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] CreateTitleRow error: {ex.Message}");
             }
         }
 
@@ -788,9 +797,9 @@ namespace WordTools.Services
 
                 rowIndex++;
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] InsertFileNameDescriptionRow error: {ex.Message}");
             }
         }
 
@@ -814,9 +823,9 @@ namespace WordTools.Services
                     cell.VerticalAlignment = WdCellVerticalAlignment.wdCellAlignVerticalCenter;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] FillEmptyCellsWithNA error: {ex.Message}");
             }
         }
 
@@ -1786,9 +1795,9 @@ namespace WordTools.Services
                 // 纯文本编号无需更新域，直接完成
                 progressCallback?.Invoke("编号完成 100%");
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[TableService] RefreshTableNumbering error: {ex.Message}");
             }
         }
 

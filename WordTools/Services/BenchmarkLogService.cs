@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -69,8 +70,9 @@ namespace WordTools.Services
                 {
                     baseDirectory = Path.GetDirectoryName(documentPath);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Debug.WriteLine($"[BenchmarkLogService] GetDefaultLogPath error: {ex.Message}");
                     baseDirectory = null;
                 }
             }

@@ -22,6 +22,11 @@ namespace WordTools.Forms
             get { return _stateController.IsCancelled; }
         }
 
+        /// <summary>
+        /// 用户在操作进行期间尝试关闭窗口（点击 X），已转换为取消请求。
+        /// </summary>
+        public bool IsCloseRequestedByUser { get; private set; }
+
         public ProgressForm(int totalFiles)
         {
             InitializeComponent(totalFiles);
@@ -85,6 +90,39 @@ namespace WordTools.Forms
             btnCancel.FlatAppearance.BorderSize = 0;
             btnCancel.Click += btnCancel_Click;
             this.Controls.Add(btnCancel);
+
+            this.FormClosing += ProgressForm_FormClosing;
+        }
+
+        /// <summary>
+        /// 用户在操作进行期间点击右上角 X 时，视为取消请求，禁止直接关闭窗口。
+        /// </summary>
+        private void ProgressForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (e.CloseReason == CloseReason.UserClosing && !_stateController.IsCompleted)
+            {
+                e.Cancel = true;
+
+                // 已经在取消过程中，仅提示用户
+                if (_stateController.IsCancelled)
+                {
+                    MessageBox.Show("正在取消当前操作，请稍候...", "提示",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var result = MessageBox.Show("操作正在进行中，是否取消？", "确认取消",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                IsCloseRequestedByUser = true;
+                _stateController.HandleButtonClick();
+                btnCancel.Enabled = _stateController.IsButtonEnabled;
+                btnCancel.Text = _stateController.ButtonText;
+            }
         }
 
         /// <summary>

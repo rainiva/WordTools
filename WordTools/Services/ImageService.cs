@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Word;
@@ -401,8 +402,9 @@ namespace WordTools.Services
                         anchors.Add(new FloatingShapeAnchor(shape.Anchor.Start, shape.Anchor.End));
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Debug.WriteLine($"[ImageService] CollectFloatingShapeAnchors iteration error: {ex.Message}");
                 }
             }
 
@@ -667,16 +669,16 @@ namespace WordTools.Services
                                 }
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // 忽略单个单元格错误
+                            Debug.WriteLine($"[ImageService] AdjustImageSizes single cell error: {ex.Message}");
                         }
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略批量操作错误
+                Debug.WriteLine($"[ImageService] AdjustImageSizes batch error: {ex.Message}");
             }
         }
 
@@ -700,9 +702,9 @@ namespace WordTools.Services
                         tbl.Rows.Add();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 忽略错误
+                    Debug.WriteLine($"[ImageService] BatchAddRows fallback error: {ex.Message}");
                 }
                 return;
             }
@@ -723,12 +725,13 @@ namespace WordTools.Services
                         tbl.Rows[tbl.Rows.Count].Select();
                         app.Selection.InsertRowsBelow(batch);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Debug.WriteLine($"[ImageService] InsertRowsBelow batch failed, falling back to row-by-row: {ex.Message}");
                         // 如果批量插入失败，回退到逐行添加
                         for (int i = 0; i < batch; i++)
                         {
-                            try { tbl.Rows.Add(); } catch (Exception rowEx) { System.Diagnostics.Debug.WriteLine("逐行添加表格行失败: " + rowEx.Message); break; }
+                            try { tbl.Rows.Add(); } catch (Exception rowEx) { Debug.WriteLine("逐行添加表格行失败: " + rowEx.Message); break; }
                         }
                     }
 
@@ -739,9 +742,9 @@ namespace WordTools.Services
                     System.Windows.Forms.Application.DoEvents();
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[ImageService] BatchAddRows error: {ex.Message}");
             }
         }
 
@@ -782,9 +785,9 @@ namespace WordTools.Services
                 // 批量添加行
                 BatchAddRows(tbl, neededRows, app);
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[ImageService] PreAllocateRows error: {ex.Message}");
             }
         }
 

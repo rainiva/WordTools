@@ -40,6 +40,7 @@ namespace WordTools.Forms
 
         private readonly IDocumentContext _documentContext;
         private readonly INotificationService _notificationService;
+        private bool _isExecuting;
 
         public ExcelDataFillerForm(IDocumentContext documentContext, INotificationService notificationService)
         {
@@ -234,6 +235,9 @@ namespace WordTools.Forms
 
             // 加载默认配置
             LoadDefaultConfig();
+
+            // 执行期间阻止用户关闭窗体
+            this.FormClosing += ExcelDataFillerForm_FormClosing;
         }
 
         /// <summary>
@@ -273,8 +277,9 @@ namespace WordTools.Forms
             {
                 return _documentContext.ActiveDocument;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[ExcelDataFillerForm] GetActiveDocument error: {ex.Message}");
                 return null;
             }
         }
@@ -337,6 +342,7 @@ namespace WordTools.Forms
             // 禁用按钮，防止重复点击
             btnExecute.Enabled = false;
             btnCancel.Enabled = false;
+            _isExecuting = true;
 
             UpdateStatus("开始执行...\r\n正在检测表格结构...");
 
@@ -355,13 +361,15 @@ namespace WordTools.Forms
                     });
 
                 AppendStatus("填充完成！");
-                btnExecute.Enabled = true;
-                btnCancel.Enabled = true;
             }
             catch (Exception ex)
             {
                 AppendStatus("错误: " + ex.Message);
                 _notificationService.ShowError(string.Format("执行出错: {0}", ex.Message), "错误");
+            }
+            finally
+            {
+                _isExecuting = false;
                 btnExecute.Enabled = true;
                 btnCancel.Enabled = true;
             }
@@ -441,6 +449,18 @@ namespace WordTools.Forms
             txtStatus.SelectionStart = txtStatus.Text.Length;
             txtStatus.ScrollToCaret();
             Application.DoEvents();
+        }
+        /// <summary>
+        /// 执行期间阻止用户关闭窗体，防止后台任务与窗体生命周期耦合问题
+        /// </summary>
+        private void ExcelDataFillerForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (_isExecuting && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                MessageBox.Show("操作正在进行中，请等待完成后再关闭窗口。", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -450,8 +451,9 @@ namespace WordTools.Forms
 
                 UpdateAutoNumberingState();
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[InsertPhotosForm] LoadConfiguration error: {ex.Message}");
             }
         }
 
@@ -475,8 +477,9 @@ namespace WordTools.Forms
                 ConfigService.SaveAutoNumbering(chkAutoNumbering.Checked);
                 ConfigService.SaveNumberAlignment(optAlignCenter.Checked ? 2 : 1);
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[InsertPhotosForm] SaveConfiguration error: {ex.Message}");
             }
         }
 
