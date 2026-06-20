@@ -36,5 +36,7 @@
     <Compile Include="..\WordTools\Services\InsertionSummaryFormatter.cs" Link="Services\InsertionSummaryFormatter.cs" />
     <Compile Include="..\WordTools\Services\LoggingOptionsStateController.cs" Link="Services\LoggingOptionsStateController.cs" />
     <Compile Include="..\WordTools\Services\ProgressFormStateController.cs" Link="Services\ProgressFormStateController.cs" />
+    <Compile Include="..\WordTools\Services\InsertionErrorClassifier.cs" Link="Services\InsertionErrorClassifier.cs" />
+    <Compile Include="..\WordTools\Services\HighPerformanceModeController.cs" Link="Services\HighPerformanceModeController.cs" />
   </ItemGroup>
 </Project>

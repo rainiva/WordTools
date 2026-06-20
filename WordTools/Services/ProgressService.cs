@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Word;
 using WordTools.Forms;
@@ -17,28 +16,12 @@ namespace WordTools.Services
     /// </summary>
     public class ProgressService
     {
-        // Windows API 声明（用于检测按键和窗口置顶）
-        [DllImport("user32.dll")]
-        private static extern short GetAsyncKeyState(int vKey);
-        private const int VK_ESCAPE = 0x1B;
-
-        [DllImport("user32.dll")]
-        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-        [DllImport("user32.dll")]
-        private static extern bool IsWindow(IntPtr hWnd);
-
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
-        private const uint SWP_NOSIZE = 0x0001;
-        private const uint SWP_NOMOVE = 0x0002;
-        private const uint SWP_SHOWWINDOW = 0x0040;
-
         private readonly IWordApplicationContext _appContext;
         private readonly IProgressReporter _progressReporter;
         private readonly IFailureDetailsPresenter _failureDetailsPresenter;
         private readonly INotificationService _notificationService;
-        private bool _isCancelled;
+        private readonly EscapeKeyMonitor _escapeMonitor;
+        private readonly HighPerformanceModeController _perfController;
 
         // 批量处理配置
         private int _refreshInterval = 10;
@@ -48,11 +31,6 @@ namespace WordTools.Services
         private int _statusBarUpdateInterval = 1;  // 状态栏更新间隔（每 N 张图片更新一次）
         private DateTime _lastStatusBarUpdate = DateTime.MinValue;  // 上次状态栏更新时间
         private const int STATUS_BAR_VISIBLE_MS = 500;  // 状态栏最小可见时间（毫秒），确保用户能看清
-
-        // 性能模式备份
-        private bool _originalScreenUpdating;
-        private bool _originalDisplayAlerts;
-        private bool _highPerformanceModeEntered;
 
         private InsertionPerformanceDiagnostics _activeDiagnostics;
 
@@ -66,127 +44,11 @@ namespace WordTools.Services
             _progressReporter = progressReporter;
             _failureDetailsPresenter = failureDetailsPresenter;
             _notificationService = notificationService;
+            _escapeMonitor = new EscapeKeyMonitor(appContext);
+            _perfController = new HighPerformanceModeController(appContext);
         }
-
-        #region 取消控制
-
-        /// <summary>
-        /// 检查是否按下 ESC 键
-        /// </summary>
-        private bool CheckEscapeKey()
-        {
-            return (GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
-        }
-
-        /// <summary>
-        /// 检查是否需要取消（支持 ESC 键和进度窗口取消按钮）
-        /// </summary>
-        private bool ShouldCancel()
-        {
-            if (_isCancelled) return true;
-
-            // 检查进度窗口是否点击了取消
-            if (_progressReporter?.IsCancelled == true)
-            {
-                _isCancelled = true;
-                return true;
-            }
-
-            if (CheckEscapeKey())
-            {
-                _isCancelled = true;
-                _appContext.Application.StatusBar = "检测到 ESC 键，正在取消操作...";
-                _appContext.DoEvents();
-                return true;
-            }
-
-            return false;
-        }
-
-        #endregion
 
         #region 性能优化
-
-        /// <summary>
-        /// 进入高性能模式（关闭 ScreenUpdating 以最大化插图性能）
-        /// </summary>
-        private void EnterHighPerformanceMode()
-        {
-            if (_highPerformanceModeEntered)
-            {
-                return;
-            }
-
-            try
-            {
-                _originalScreenUpdating = _appContext.Application.ScreenUpdating;
-                _originalDisplayAlerts = _appContext.Application.DisplayAlerts != WdAlertLevel.wdAlertsNone;
-
-                // 关闭 ScreenUpdating 以提升插图性能（进度由独立窗口显示）
-                _appContext.Application.ScreenUpdating = false;
-                _appContext.Application.DisplayAlerts = WdAlertLevel.wdAlertsNone;
-
-                var doc = _appContext.Application.ActiveDocument;
-                if (doc != null)
-                {
-                    doc.SpellingChecked = true;
-                    doc.GrammarChecked = true;
-                }
-
-                _highPerformanceModeEntered = true;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[ProgressService] EnterHighPerformanceMode error: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// 退出高性能模式。仅在成功进入过时执行恢复，避免取消/验证失败路径把 Word 的
-        /// ScreenUpdating/DisplayAlerts 恢复到错误默认值，导致光标或界面异常。
-        /// </summary>
-        private void ExitHighPerformanceMode()
-        {
-            if (!_highPerformanceModeEntered)
-            {
-                return;
-            }
-
-            try
-            {
-                _appContext.Application.ScreenUpdating = _originalScreenUpdating;
-                _appContext.Application.DisplayAlerts = _originalDisplayAlerts 
-                    ? WdAlertLevel.wdAlertsAll 
-                    : WdAlertLevel.wdAlertsNone;
-                _highPerformanceModeEntered = false;
-            }
-            catch (Exception ex)
-            {
-                SafeIgnore(ex, "退出高性能模式失败");
-            }
-        }
-
-        /// <summary>
-        /// 根据文件数量获取优化的刷新间隔
-        /// </summary>
-        private int GetOptimizedRefreshInterval(int totalFiles)
-        {
-            if (totalFiles < 30) return 10;
-            if (totalFiles < 100) return 15;
-            return 20;
-        }
-
-        /// <summary>
-        /// 根据文件数量获取进度更新间隔
-        /// 大量图片时降低更新频率以最大化插图性能
-        /// </summary>
-        private int GetStatusBarUpdateInterval(int totalFiles)
-        {
-            if (totalFiles <= 10) return 1;     // 10 张以内：每张都更新
-            if (totalFiles <= 50) return 5;     // 50 张以内：每 5 张更新
-            if (totalFiles <= 200) return 15;   // 200 张以内：每 15 张更新
-            return 25;                           // 更多：每 25 张更新（最大化性能）
-        }
 
         /// <summary>
         /// 清理内存（分级 GC 策略）
@@ -239,7 +101,7 @@ namespace WordTools.Services
             bool skippedClear = false;
             string benchmarkStatus = "Completed";
             string benchmarkError = null;
-            _isCancelled = false;
+            _escapeMonitor.Reset();
             int processedCount = 0;
             int successCount = 0;
             int failCount = 0;
@@ -339,20 +201,20 @@ namespace WordTools.Services
 
                     if (confirmResult != DialogResult.OK)
                     {
-                        _isCancelled = true;
+                        _escapeMonitor.Cancel();
                         return;
                     }
                 }
 
                 // 设置优化参数
-                _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
-                _statusBarUpdateInterval = GetStatusBarUpdateInterval(totalFiles);
+                _refreshInterval = _perfController.GetOptimizedRefreshInterval(totalFiles);
+                _statusBarUpdateInterval = _perfController.GetStatusBarUpdateInterval(totalFiles);
                 _memoryCleanInterval = _refreshInterval * 10;
                 _fullGcInterval = _memoryCleanInterval * 5;
                 _saveInterval = _refreshInterval * 20;
 
                 // 进入高性能模式
-                EnterHighPerformanceMode();
+                _perfController.Enter();
 
                 // 创建并显示进度窗口
                 _progressReporter?.Show();
@@ -402,7 +264,7 @@ namespace WordTools.Services
                     var subfolderKeys = new System.Collections.Generic.List<string>(imageFiles.SubfolderFiles.Keys);
                     foreach (var subfolder in subfolderKeys)
                     {
-                        if (ShouldCancel()) break;
+                        if (_escapeMonitor.ShouldCancel(_progressReporter)) break;
 
                         string[] subFiles = imageFiles.SubfolderFiles[subfolder];
 
@@ -453,7 +315,7 @@ namespace WordTools.Services
                 // 更新进度窗口为完成状态
                 CloseProgressForm();
 
-                if (_isCancelled)
+                if (_escapeMonitor.IsCancelled)
                 {
                     benchmarkStatus = "Cancelled";
                     _notificationService?.ShowWarning(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示");
@@ -476,7 +338,7 @@ namespace WordTools.Services
             }
             finally
             {
-                if (_isCancelled)
+                if (_escapeMonitor.IsCancelled)
                 {
                     benchmarkStatus = "Cancelled";
                 }
@@ -497,7 +359,7 @@ namespace WordTools.Services
                 }
 
                 // 1. 先退出高性能模式，让用户立即看到已插入的图片
-                ExitHighPerformanceMode();
+                _perfController.Exit();
 
                 // 循环 DoEvents 让 Word 有充足时间完成屏幕重绘
                 try
@@ -536,7 +398,7 @@ namespace WordTools.Services
                     SuccessCount = successCount,
                     FailCount = failCount,
                     MergedCellCount = mergedCellRows.Count,
-                    Cancelled = _isCancelled,
+                    Cancelled = _escapeMonitor.IsCancelled,
                     NeedDescription = needDescription,
                     UseFileNameAsDescription = useFileNameAsDescription,
                     UseFolderNameAsDescription = useFolderNameAsDescription,
@@ -591,7 +453,7 @@ namespace WordTools.Services
             bool skippedClear = false;
             string benchmarkStatus = "Completed";
             string benchmarkError = null;
-            _isCancelled = false;
+            _escapeMonitor.Reset();
             int processedCount = 0;
             int successCount = 0;
             int failCount = 0;
@@ -636,8 +498,8 @@ namespace WordTools.Services
                 t0 = sw.ElapsedMilliseconds;
 
                 int totalFiles = files.Length;
-                _refreshInterval = GetOptimizedRefreshInterval(totalFiles);
-                _statusBarUpdateInterval = GetStatusBarUpdateInterval(totalFiles);
+                _refreshInterval = _perfController.GetOptimizedRefreshInterval(totalFiles);
+                _statusBarUpdateInterval = _perfController.GetStatusBarUpdateInterval(totalFiles);
                 // 注意：ProcessFileBatch 内部会做批量预检，totalFiles 保持原始值用于进度显示
 
                 // 清除 startRow 之后的编号（增量模式，不影响前面已有的编号）
@@ -678,7 +540,7 @@ namespace WordTools.Services
                 }
                 t1 = sw.ElapsedMilliseconds;
 
-                EnterHighPerformanceMode();
+                _perfController.Enter();
 
                 // 创建并显示进度窗口（独立于 Word，不受 ScreenUpdating 影响）
                 _progressReporter?.Show();
@@ -733,7 +595,7 @@ namespace WordTools.Services
                 // 更新进度窗口为完成状态
                 CloseProgressForm();
 
-                if (_isCancelled)
+                if (_escapeMonitor.IsCancelled)
                 {
                     benchmarkStatus = "Cancelled";
                     _notificationService?.ShowWarning(string.Format("操作已取消。已插入 {0} 张图片。\n耗时: {1}", successCount, timeInfo) + timeDetail, "提示");
@@ -756,7 +618,7 @@ namespace WordTools.Services
             }
             finally
             {
-                if (_isCancelled)
+                if (_escapeMonitor.IsCancelled)
                 {
                     benchmarkStatus = "Cancelled";
                 }
@@ -777,7 +639,7 @@ namespace WordTools.Services
                 }
 
                 // 1. 先退出高性能模式，让用户立即看到已插入的图片
-                ExitHighPerformanceMode();
+                _perfController.Exit();
 
                 // 循环 DoEvents 让 Word 有充足时间完成屏幕重绘
                 try
@@ -816,7 +678,7 @@ namespace WordTools.Services
                     SuccessCount = successCount,
                     FailCount = failCount,
                     MergedCellCount = mergedCellRows.Count,
-                    Cancelled = _isCancelled,
+                    Cancelled = _escapeMonitor.IsCancelled,
                     NeedDescription = needDescription,
                     UseFileNameAsDescription = useFileNameAsDescription,
                     UseFolderNameAsDescription = useFolderNameAsDescription,
@@ -888,7 +750,7 @@ namespace WordTools.Services
 
             for (int i = 0; i < validFiles.Count; i++)
             {
-                if (ShouldCancel()) break;
+                if (_escapeMonitor.ShouldCancel(_progressReporter)) break;
 
                 string filePath = validFiles[i];
                 string fileName = FileService.GetFileName(filePath);
@@ -1085,7 +947,7 @@ namespace WordTools.Services
                         failCount++;
                         failedFiles?.Add((fileName, errorMsg ?? "未知错误"));
 
-                        if (imagesPlacedInCurrentRow == 1 && IsMergedCellError(errorMsg))
+                        if (imagesPlacedInCurrentRow == 1 && InsertionErrorClassifier.IsMergedCellError(errorMsg))
                         {
                             AddMergedRow(mergedCellRows, rowIndex);
                             imagesPlacedInCurrentRow = 0;
@@ -1102,10 +964,10 @@ namespace WordTools.Services
                 catch (Exception ex)
                 {
                     failCount++;
-                    string classifiedError = ClassifyInsertionError(ex);
+                    string classifiedError = InsertionErrorClassifier.Classify(ex);
                     failedFiles?.Add((fileName, classifiedError));
 
-                    if (imagesPlacedInCurrentRow == 1 && IsMergedCellError(classifiedError))
+                    if (imagesPlacedInCurrentRow == 1 && InsertionErrorClassifier.IsMergedCellError(classifiedError))
                     {
                         AddMergedRow(mergedCellRows, rowIndex);
                         imagesPlacedInCurrentRow = 0;
@@ -1224,7 +1086,7 @@ namespace WordTools.Services
                 // 更新进度窗口（独立于 Word，不受 ScreenUpdating 影响）
                 _progressReporter?.UpdateProgress(current, total, shortFileName, elapsed);
                 // 确保进度窗口保持置顶
-                EnsureWindowTopMost(_progressReporter?.Handle ?? IntPtr.Zero);
+                WindowActivationService.EnsureWindowTopMost(_progressReporter?.Handle ?? IntPtr.Zero);
 
                 // 进度由独立窗口显示，不再更新 Word 状态栏
             }
@@ -1242,152 +1104,9 @@ namespace WordTools.Services
             }
         }
 
-        /// <summary>
-        /// 确保窗口保持置顶（使用 Win32 API，比 TopMost 更可靠）
-        /// </summary>
-        private void EnsureWindowTopMost(IntPtr hWnd)
-        {
-            try
-            {
-                if (hWnd != IntPtr.Zero && IsWindow(hWnd))
-                {
-                    SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                }
-            }
-            catch (Exception ex) { SafeIgnore(ex, "设置窗口置顶失败"); }
-        }
-
-        /// <summary>
-        /// 确保 Word 窗口保持激活状态
-        /// </summary>
-        private void EnsureWordWindowActive()
-        {
-            try
-            {
-                if (_appContext.Application != null && _appContext.Application.ActiveWindow != null)
-                {
-                    _appContext.Application.ActiveWindow.Activate();
-                }
-            }
-            catch (Exception ex) { SafeIgnore(ex, "激活 Word 窗口失败"); }
-        }
-
         #endregion
 
         #region 错误分类
-
-        /// <summary>
-        /// 将异常分类为用户友好的错误信息
-        /// </summary>
-        private string ClassifyInsertionError(Exception ex)
-        {
-            if (ex == null) return "未知错误";
-
-            string msg = ex.Message ?? "";
-            string hResult = ex.HResult.ToString("X8");
-
-            // COM 忙碌错误
-            if (msg.IndexOf("rejected", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("retry", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("busy", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("忙", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                ex.HResult == unchecked((int)0x80010001) ||
-                ex.HResult == unchecked((int)0x8001010A))
-            {
-                return "Word 正忙，请关闭其他对话框后重试";
-            }
-
-            // 文件不存在
-            if (ex is System.IO.FileNotFoundException ||
-                msg.IndexOf("找不到", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("not found", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "文件不存在或已被移动";
-            }
-
-            // 文件被占用
-            if (ex is System.IO.IOException ||
-                msg.IndexOf("进程无法访问", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("being used", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("占用", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "文件被其他程序占用";
-            }
-
-            // 权限错误
-            if (ex is System.UnauthorizedAccessException ||
-                msg.IndexOf("拒绝访问", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("access denied", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "没有文件访问权限";
-            }
-
-            // 合并单元格
-            if (msg.IndexOf("合并", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("merge", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("单元格索引异常", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "目标单元格为合并单元格，无法插入";
-            }
-
-            // 行高/宽度异常
-            if (msg.IndexOf("行高异常", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("宽度异常", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return msg; // 直接使用预生成的描述
-            }
-
-            // 图片格式不支持
-            if (msg.IndexOf("格式", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("format", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("不支持", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("not supported", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "图片格式不受支持";
-            }
-
-            // 文件损坏
-            if (msg.IndexOf("损坏", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("corrupt", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("invalid", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("0字节", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "图片文件损坏";
-            }
-
-            // 尺寸异常
-            if (msg.IndexOf("尺寸异常", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("Width", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("Height", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "图片尺寸异常";
-            }
-
-            // 表格操作失败
-            if (msg.IndexOf("表格", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                msg.IndexOf("行添加失败", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "表格操作失败: " + msg;
-            }
-
-            // 默认返回简化信息
-            if (msg.Length > 80)
-            {
-                return msg.Substring(0, 80) + "...";
-            }
-            return msg;
-        }
-
-        private static bool IsMergedCellError(string errorMessage)
-        {
-            if (string.IsNullOrEmpty(errorMessage))
-            {
-                return false;
-            }
-
-            return errorMessage.IndexOf("合并", StringComparison.OrdinalIgnoreCase) >= 0
-                || errorMessage.IndexOf("merge", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
 
         private static void AddMergedRow(List<int> mergedCellRows, int rowIndex)
         {

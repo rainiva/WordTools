@@ -122,6 +122,10 @@
     <Compile Include="Services\TableService.cs" />
     <Compile Include="Services\TableNumberingService.cs" />
     <Compile Include="Services\ProgressService.cs" />
+    <Compile Include="Services\InsertionErrorClassifier.cs" />
+    <Compile Include="Services\WindowActivationService.cs" />
+    <Compile Include="Services\EscapeKeyMonitor.cs" />
+    <Compile Include="Services\HighPerformanceModeController.cs" />
     <Compile Include="Services\EDF_DataFillerService.cs" />
     <Compile Include="Services\EDF_TemplateDetector.cs" />
     <Compile Include="Forms\InsertPhotosForm.cs" />
