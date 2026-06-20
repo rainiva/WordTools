@@ -10,7 +10,12 @@ def is_administrator() -> bool:
         return False
 
 
-def validate_live_preflight(config: dict[str, Any], repo_root: Path) -> list[str]:
+def validate_live_preflight(
+    config: dict[str, Any],
+    repo_root: Path,
+    *,
+    is_admin: bool | None = None,
+) -> list[str]:
     issues: list[str] = []
 
     phases = config.get("phases", {})
@@ -23,7 +28,10 @@ def validate_live_preflight(config: dict[str, Any], repo_root: Path) -> list[str
     if not needs_live:
         return issues
 
-    if not is_administrator():
+    if is_admin is None:
+        is_admin = is_administrator()
+
+    if not is_admin:
         issues.append("Live phases require an elevated (Administrator) shell.")
 
     plugin = config.get("plugin", {})
