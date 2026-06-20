@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using System.Windows.Forms;
 using Word = Microsoft.Office.Interop.Word;
 using Extensibility;
 using System.Runtime.InteropServices;
@@ -181,21 +180,7 @@ namespace WordTools
         /// </summary>
         public void OnExcelDataFillerClick(Office.IRibbonControl control)
         {
-            try
-            {
-                var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
-                var documentContext = new Services.Adapters.WordDocumentContext(appContext);
-                var notificationService = new Services.Adapters.MessageBoxNotificationService();
-                using (var form = new Forms.ExcelDataFillerForm(documentContext, notificationService))
-                {
-                    form.ShowDialog();
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(string.Format("打开Excel数据填充工具失败: {0}", ex.Message),
-                               "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            new ExcelDataFillerOrchestrator(Globals.Application).ShowForm();
         }
 
         #endregion

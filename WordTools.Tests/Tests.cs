@@ -348,6 +348,20 @@ namespace WordTools.Tests
         }
 
         [Fact]
+        public void TestExcelDataFillerOrchestratorOwnsFormLaunch()
+        {
+            string orchestratorPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Services", "ExcelDataFillerOrchestrator.cs");
+            string orchestratorSource = File.ReadAllText(Path.GetFullPath(orchestratorPath));
+            string addInPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "ThisAddIn.cs");
+            string addInSource = File.ReadAllText(Path.GetFullPath(addInPath));
+
+            Assert.Contains("ExcelDataFillerForm", orchestratorSource);
+            Assert.Contains("ShowDialog();", orchestratorSource);
+            Assert.Contains("ExcelDataFillerOrchestrator", addInSource);
+            Assert.DoesNotContain("ExcelDataFillerForm", addInSource);
+        }
+
+        [Fact]
         public void TestRibbonXmlExposesLoggingSettingsMenu()
         {
             string ribbonXmlPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Ribbon.xml");

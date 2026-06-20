@@ -121,6 +121,7 @@
     <Compile Include="Services\InsertionSummaryFormatter.cs" />
     <Compile Include="Services\LoggingOptionsStateController.cs" />
     <Compile Include="Services\ProgressFormStateController.cs" />
+    <Compile Include="Services\ExcelDataFillerOrchestrator.cs" />
     <Compile Include="Services\InsertPhotosOrchestrator.cs" />
     <Compile Include="Services\NumberingRefreshService.cs" />
     <Compile Include="Services\TableService.cs" />
