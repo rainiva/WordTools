@@ -29,4 +29,15 @@ python -m pytest tests/test_fixtures.py tests/test_batch_insert_expectations.py
 
 Report layer: `automation/reports/word64_batch_insert_e2e/matrix-report.json` → `batch_insert`.
 
-Phase A (full WinForms UI) is deferred.
+Phase A (full WinForms UI) is available via COM automation entry + FlaUI.
+
+| AC ID | Scenario | Automated | Notes |
+|-------|----------|-----------|-------|
+| AC-UI-B03 | Ribbon-equivalent form → 选择文件 → ProgressForm | Yes (manual/`ui_integration`) | Requires `WORDTOOLS_UI_AUTOMATION=1` + registered add-in |
+
+```powershell
+$env:WORDTOOLS_UI_AUTOMATION = "1"
+cd automation
+python -m pytest tests/test_batch_insert_ui_e2e.py -m ui_integration -v
+powershell -File ps/Matrix.BatchInsertUI.ps1 -RepoRoot .. -CaseId AC-UI-B03
+```

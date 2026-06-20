@@ -141,6 +141,15 @@ namespace WordTools
             new InsertPhotosOrchestrator(Globals.Application).ShowFormAndExecuteIfConfirmed();
         }
 
+        /// <summary>
+        /// UI 自动化入口：等价于 Ribbon「批量插图」，需 WORDTOOLS_UI_AUTOMATION=1。
+        /// </summary>
+        public void Automation_ShowInsertPhotosForm()
+        {
+            InsertPhotosAutomationGate.EnsureEnabled();
+            new InsertPhotosOrchestrator(Globals.Application).ShowFormAndExecuteIfConfirmed();
+        }
+
         public void OnShowLoggingSettingsSummary(Office.IRibbonControl control)
         {
             _ribbonController.OnShowLoggingSettingsSummary(control);

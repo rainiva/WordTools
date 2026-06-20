@@ -44,6 +44,7 @@ namespace WordTools.Forms
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.Text = "插入图片进度";
+            this.Name = "ProgressForm";
             this.BackColor = Theme.Colors.Background;
             this.ClientSize = new Size(640, 235);
             this.TopMost = true;

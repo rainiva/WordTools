@@ -44,5 +44,6 @@
     <Compile Include="..\WordTools\Services\Adapters\CapturingNotificationService.cs" Link="Services\Adapters\CapturingNotificationService.cs" />
     <Compile Include="..\WordTools\Services\Adapters\NullFailureDetailsPresenter.cs" Link="Services\Adapters\NullFailureDetailsPresenter.cs" />
     <Compile Include="..\WordTools\Services\InsertPhotosExecutionServices.cs" Link="Services\InsertPhotosExecutionServices.cs" />
+    <Compile Include="..\WordTools\Services\InsertPhotosAutomationGate.cs" Link="Services\InsertPhotosAutomationGate.cs" />
   </ItemGroup>
 </Project>

@@ -93,6 +93,7 @@ namespace WordTools.Forms
             FORM_WIDTH = S(Theme.Layout.FormWidthSmall);
 
             Text = "批量插图工具";
+            Name = "InsertPhotosForm";
             ClientSize = new Size(FORM_WIDTH, S(400));
 
             int currentTop = MARGIN;
@@ -393,6 +394,8 @@ namespace WordTools.Forms
             Controls.Add(btnInsertFromFolder);
 
             btnSelectFiles = UiToolkit.CreateButton("选择文件", UiToolkit.ButtonStyle.Primary);
+            btnSelectFiles.Name = "btnSelectFiles";
+            btnSelectFiles.AccessibleName = "btnSelectFiles";
             btnSelectFiles.Location = new DrawingPoint(S(125), topPos);
             btnSelectFiles.Size = new Size(S(100), CTRL_HEIGHT);
             btnSelectFiles.Click += BtnSelectFiles_Click;
@@ -605,8 +608,18 @@ namespace WordTools.Forms
         {
             try
             {
-                string lastPath = ConfigService.GetLastFolderPath();
-                var selectedFiles = SelectImageFiles("请选择图片文件...", lastPath);
+                string[] selectedFiles = null;
+                if (InsertPhotosAutomationGate.IsEnabled
+                    && InsertPhotosAutomationGate.TryGetPresetSelectedFiles(out var presetFiles))
+                {
+                    selectedFiles = presetFiles;
+                }
+                else
+                {
+                    string lastPath = ConfigService.GetLastFolderPath();
+                    selectedFiles = SelectImageFiles("请选择图片文件...", lastPath);
+                }
+
                 if (selectedFiles == null || selectedFiles.Length == 0)
                 {
                     return;

@@ -211,3 +211,30 @@ def evaluate_batch_insert_case(case_id: str, result: dict[str, Any]) -> dict[str
 
     base["details"].append(f"unknown case_id: {case_id}")
     return base
+
+
+def evaluate_batch_insert_ui_case(case_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    base = {
+        "case_id": case_id,
+        "pass": False,
+        "details": [],
+    }
+
+    if not result.get("pass", False):
+        base["details"].append("host reported pass=false")
+        return base
+
+    if case_id == "AC-UI-B03":
+        ok = (
+            bool(result.get("ui_flow_started"))
+            and bool(result.get("form_clicked"))
+            and bool(result.get("progress_seen"))
+            and int(result.get("inline_shape_count", 0)) >= 4
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected UI flow + >=4 inline shapes")
+        return base
+
+    base["details"].append(f"unknown ui case_id: {case_id}")
+    return base
