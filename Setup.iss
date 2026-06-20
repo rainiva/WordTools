@@ -3,7 +3,7 @@
 
 ; MyAppVersion is synced from version.json via sync-version.ps1.
 #ifndef MyAppVersion
-  #define MyAppVersion "1.3.0"
+  #define MyAppVersion "1.3.1"
 #endif
 #define MyAppName "Word工具箱"
 #define MyAppPublisher "WordTools"

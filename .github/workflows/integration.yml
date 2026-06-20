@@ -1,0 +1,78 @@
+name: Integration (manual)
+
+# Requires Windows + Microsoft Word on the runner (dev VM or self-hosted).
+# Default GitHub-hosted runners usually lack Word; the job skips with a notice.
+
+on:
+  workflow_dispatch:
+    inputs:
+      marker:
+        description: Pytest marker expression
+        required: false
+        default: integration
+        type: string
+
+jobs:
+  integration:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Word
+        id: word
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles}\Microsoft Office\Root\Office16\WINWORD.EXE",
+            "${env:ProgramFiles(x86)}\Microsoft Office\Root\Office16\WINWORD.EXE"
+          )
+          $found = $false
+          foreach ($path in $candidates) {
+            if (Test-Path -LiteralPath $path) {
+              Write-Host "Found Word: $path"
+              $found = $true
+              break
+            }
+          }
+          "installed=$found" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Word not available
+        if: steps.word.outputs.installed != 'True'
+        shell: pwsh
+        run: |
+          Write-Warning "Microsoft Word is not installed on this runner."
+          Write-Host "Run integration locally: cd automation && python -m pytest tests -m integration -v"
+          exit 0
+
+      - name: Setup Python
+        if: steps.word.outputs.installed == 'True'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.word.outputs.installed == 'True'
+        working-directory: automation
+        run: python -m pip install -r requirements.txt
+
+      - name: Build WordTools Release
+        if: steps.word.outputs.installed == 'True'
+        shell: pwsh
+        run: |
+          $msbuild = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $msbuild) {
+            throw "MSBuild not found; install Visual Studio Build Tools on self-hosted runner."
+          }
+          & $msbuild WordTools\WordTools.csproj /p:Configuration=Release /p:Platform=AnyCPU /v:minimal
+
+      - name: pytest integration
+        if: steps.word.outputs.installed == 'True'
+        working-directory: automation
+        shell: pwsh
+        run: |
+          Get-Process WINWORD -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          python -m pytest tests -m "${{ inputs.marker }}" -v
