@@ -96,6 +96,7 @@
 
     <Compile Include="Services\Abstractions\IProgressReporter.cs" />
     <Compile Include="Services\Abstractions\ITableService.cs" />
+    <Compile Include="Services\Abstractions\ITableNumberingService.cs" />
     <Compile Include="Services\Abstractions\IFailureDetailsPresenter.cs" />
     <Compile Include="Services\Abstractions\INotificationService.cs" />
     <Compile Include="Services\Abstractions\IDocumentContext.cs" />
