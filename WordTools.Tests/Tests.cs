@@ -332,16 +332,19 @@ namespace WordTools.Tests
         {
             string sourcePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Forms", "InsertPhotosForm.cs");
             string source = File.ReadAllText(Path.GetFullPath(sourcePath));
+            string orchestratorPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Services", "InsertPhotosOrchestrator.cs");
+            string orchestratorSource = File.ReadAllText(Path.GetFullPath(orchestratorPath));
             string addInPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "ThisAddIn.cs");
             string addInSource = File.ReadAllText(Path.GetFullPath(addInPath));
 
             Assert.DoesNotContain("Hide();", source);
             Assert.Contains("PendingRequest = new InsertPhotosRequest", source);
             Assert.Contains("DialogResult = DialogResult.OK;", source);
-            Assert.Contains("ExecuteInsertPhotosRequestDeferred(pendingRequest);", addInSource);
+            Assert.Contains("ExecuteDeferred(pendingRequest);", orchestratorSource);
             Assert.True(
-                addInSource.Contains("System.Windows.Forms.Timer") || addInSource.Contains("new Timer"),
-                "add-in should defer insertion until after the modal dialog has fully closed");
+                orchestratorSource.Contains("System.Windows.Forms.Timer") || orchestratorSource.Contains("new Timer"),
+                "orchestrator should defer insertion until after the modal dialog has fully closed");
+            Assert.Contains("InsertPhotosOrchestrator", addInSource);
         }
 
         [Fact]

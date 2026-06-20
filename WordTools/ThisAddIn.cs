@@ -6,7 +6,6 @@ using Word = Microsoft.Office.Interop.Word;
 using Extensibility;
 using System.Runtime.InteropServices;
 using Office = Microsoft.Office.Core;
-using WordTools.Forms;
 using WordTools.Services;
 
 namespace WordTools
@@ -140,7 +139,7 @@ namespace WordTools
         /// </summary>
         public void OnInsertPhotosClick(Office.IRibbonControl control)
         {
-            ShowInsertPhotosForm();
+            new InsertPhotosOrchestrator(Globals.Application).ShowFormAndExecuteIfConfirmed();
         }
 
         public void OnShowLoggingSettingsSummary(Office.IRibbonControl control)
@@ -197,125 +196,6 @@ namespace WordTools
                 MessageBox.Show(string.Format("打开Excel数据填充工具失败: {0}", ex.Message),
                                "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        #endregion
-
-        #region 窗体显示
-
-        /// <summary>
-        /// 显示批量插图主窗体
-        /// </summary>
-        public void ShowInsertPhotosForm()
-        {
-            try
-            {
-                InsertPhotosRequest pendingRequest = null;
-                using (var form = new InsertPhotosForm(Globals.Application))
-                {
-                    if (form.ShowDialog() == DialogResult.OK)
-                    {
-                        pendingRequest = form.PendingRequest;
-                    }
-                }
-
-                if (pendingRequest != null)
-                {
-                    ExecuteInsertPhotosRequestDeferred(pendingRequest);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    "打开窗体失败: " + ex.Message,
-                    "错误",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-            }
-        }
-
-        private void ExecuteInsertPhotosRequest(InsertPhotosRequest request)
-        {
-            if (request == null)
-            {
-                return;
-            }
-
-            var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
-            var notificationService = new Services.Adapters.MessageBoxNotificationService();
-            var failureDetailsPresenter = new Services.Adapters.FailureDetailsFormAdapter();
-
-            int totalFiles = request.Mode == InsertPhotosRequestMode.Folder
-                ? Services.FileService.CountTotalImageFiles(
-                    request.FolderPath,
-                    request.IncludeRootImages,
-                    request.IncludeSubFolderImages)
-                : (request.SelectedFiles?.Length ?? 0);
-
-            var progressReporter = new Services.Adapters.ProgressFormAdapter(totalFiles);
-            var progressService = new Services.ProgressService(
-                appContext,
-                progressReporter,
-                failureDetailsPresenter,
-                notificationService);
-
-            if (request.Mode == InsertPhotosRequestMode.Folder)
-            {
-                progressService.InsertPhotosWithProgress(
-                    request.FolderPath,
-                    request.MinHeight,
-                    request.NeedDescription,
-                    request.UseFileNameAsDescription,
-                    request.UseFolderNameAsDescription,
-                    request.IncludeRootImages,
-                    request.IncludeSubFolderImages,
-                    request.NeedAutoNumbering,
-                    request.NumberAlignment,
-                    request.NumberPosition);
-                return;
-            }
-
-            progressService.InsertSelectedPhotosWithProgress(
-                request.SelectedFiles,
-                request.MinHeight,
-                request.NeedDescription,
-                request.UseFileNameAsDescription,
-                request.UseFolderNameAsDescription,
-                request.NeedAutoNumbering,
-                request.NumberAlignment,
-                request.NumberPosition);
-        }
-
-        private void ExecuteInsertPhotosRequestDeferred(InsertPhotosRequest request)
-        {
-            if (request == null)
-            {
-                return;
-            }
-
-            // 使用一次性 Timer 在消息循环的下一周期调度插入操作。
-            // 这样可以确保模态对话框已完全关闭，避免在对话框句柄仍有效时操作 Word。
-            var timer = new System.Windows.Forms.Timer { Interval = 1 };
-            timer.Tick += (sender, e) =>
-            {
-                timer.Stop();
-                timer.Dispose();
-
-                try
-                {
-                    ExecuteInsertPhotosRequest(request);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(
-                        "批量插图失败: " + ex.Message,
-                        "错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
-            };
-
-            timer.Start();
         }
 
         #endregion
