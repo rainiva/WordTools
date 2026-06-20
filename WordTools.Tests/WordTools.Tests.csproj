@@ -25,6 +25,9 @@
     <Compile Include="..\WordTools\Services\Abstractions\IProgressReporter.cs" Link="Services\Abstractions\IProgressReporter.cs" />
     <Compile Include="..\WordTools\Services\Abstractions\ITableService.cs" Link="Services\Abstractions\ITableService.cs" />
     <Compile Include="..\WordTools\Services\Abstractions\ITableNumberingService.cs" Link="Services\Abstractions\ITableNumberingService.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IConfigService.cs" Link="Services\Abstractions\IConfigService.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IFileService.cs" Link="Services\Abstractions\IFileService.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\IBenchmarkLogService.cs" Link="Services\Abstractions\IBenchmarkLogService.cs" />
     <Compile Include="..\WordTools\Services\Abstractions\IWordApplicationContext.cs" Link="Services\Abstractions\IWordApplicationContext.cs" />
     <Compile Include="..\WordTools\Services\BenchmarkLogService.cs" Link="Services\BenchmarkLogService.cs" />
     <Compile Include="..\WordTools\Services\ImageInsertionBatchContext.cs" Link="Services\ImageInsertionBatchContext.cs" />
