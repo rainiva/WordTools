@@ -310,7 +310,7 @@ namespace WordTools.Services
                 
                 if (needClearNumbering)
                 {
-                    TableService.ClearTableNumbering(tbl, startRow);
+                    TableNumberingService.ClearTableNumbering(tbl, startRow);
                 }
                 else
                 {
@@ -370,7 +370,7 @@ namespace WordTools.Services
                 int startNumber = 1;
                 if (needAutoNumbering && startRow > 1)
                 {
-                    startNumber = TableService.CalculateNextSequenceNumber(tbl, startRow);
+                    startNumber = TableNumberingService.CalculateNextSequenceNumber(tbl, startRow);
                 }
                 t2 = sw.ElapsedMilliseconds;
                 int currentNumber = startNumber;
@@ -670,7 +670,7 @@ namespace WordTools.Services
                 
                 if (needClearNumbering)
                 {
-                    TableService.ClearTableNumbering(tbl, startRow);
+                    TableNumberingService.ClearTableNumbering(tbl, startRow);
                 }
                 else
                 {
@@ -696,7 +696,7 @@ namespace WordTools.Services
                 int startNumber = 1;
                 if (needAutoNumbering && startRow > 1)
                 {
-                    startNumber = TableService.CalculateNextSequenceNumber(tbl, startRow);
+                    startNumber = TableNumberingService.CalculateNextSequenceNumber(tbl, startRow);
                 }
                 t2 = sw.ElapsedMilliseconds;
                 t3 = t2;
@@ -1030,7 +1030,7 @@ namespace WordTools.Services
                                 {
                                     for (int col = 1; col <= 2; col++)
                                     {
-                                        try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
+                                        try { TableNumberingService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
                                         catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                                         currentNumber++;
                                     }
@@ -1053,7 +1053,7 @@ namespace WordTools.Services
                                 {
                                     for (int col = 1; col <= 2; col++)
                                     {
-                                        try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
+                                        try { TableNumberingService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
                                         catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                                         currentNumber++;
                                     }
@@ -1149,7 +1149,7 @@ namespace WordTools.Services
                 {
                     for (int col = 1; col <= 2; col++)
                     {
-                        try { TableService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
+                        try { TableNumberingService.InsertNumberText(tbl, descriptionRow, col, numberAlignment, currentNumber, true, numberPosition); }
                         catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                         currentNumber++; // 每列递增
                     }
@@ -1172,7 +1172,7 @@ namespace WordTools.Services
                 {
                     for (int col = 1; col <= 2; col++)
                     {
-                        try { TableService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
+                        try { TableNumberingService.InsertNumberText(tbl, rowIndex, col, numberAlignment, currentNumber, true, numberPosition); }
                         catch (Exception ex) { SafeIgnore(ex, "插入编号文本失败"); }
                         currentNumber++; // 每列递增
                     }

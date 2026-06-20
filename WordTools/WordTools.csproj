@@ -120,6 +120,7 @@
     <Compile Include="Services\LoggingOptionsStateController.cs" />
     <Compile Include="Services\ProgressFormStateController.cs" />
     <Compile Include="Services\TableService.cs" />
+    <Compile Include="Services\TableNumberingService.cs" />
     <Compile Include="Services\ProgressService.cs" />
     <Compile Include="Services\EDF_DataFillerService.cs" />
     <Compile Include="Services\EDF_TemplateDetector.cs" />

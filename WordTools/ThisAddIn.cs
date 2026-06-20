@@ -236,7 +236,7 @@ namespace WordTools
                 Application.StatusBar = "正在刷新编号...";
                 System.Windows.Forms.Application.DoEvents();
 
-                Services.TableService.RefreshTableNumbering(tbl, doc, 2, (status) =>
+                Services.TableNumberingService.RefreshTableNumbering(tbl, doc, 2, (status) =>
                 {
                     try
                     {
