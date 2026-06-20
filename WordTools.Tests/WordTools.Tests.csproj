@@ -23,6 +23,7 @@
     <Compile Include="..\WordTools\Services\Abstractions\IFailureDetailsPresenter.cs" Link="Services\Abstractions\IFailureDetailsPresenter.cs" />
     <Compile Include="..\WordTools\Services\Abstractions\INotificationService.cs" Link="Services\Abstractions\INotificationService.cs" />
     <Compile Include="..\WordTools\Services\Abstractions\IProgressReporter.cs" Link="Services\Abstractions\IProgressReporter.cs" />
+    <Compile Include="..\WordTools\Services\Abstractions\ITableService.cs" Link="Services\Abstractions\ITableService.cs" />
     <Compile Include="..\WordTools\Services\Abstractions\IWordApplicationContext.cs" Link="Services\Abstractions\IWordApplicationContext.cs" />
     <Compile Include="..\WordTools\Services\BenchmarkLogService.cs" Link="Services\BenchmarkLogService.cs" />
     <Compile Include="..\WordTools\Services\ImageInsertionBatchContext.cs" Link="Services\ImageInsertionBatchContext.cs" />
