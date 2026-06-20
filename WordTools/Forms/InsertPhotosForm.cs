@@ -130,7 +130,7 @@ namespace WordTools.Forms
             Theme.CenterTextVertically(txtFolderPath);
             Controls.Add(txtFolderPath);
 
-            btnBrowseFolder = Theme.CreateButton("浏览...", Theme.ButtonStyle.Default);
+            btnBrowseFolder = UiToolkit.CreateButton("浏览...", UiToolkit.ButtonStyle.Default);
             btnBrowseFolder.Location = new DrawingPoint(S(385), topPos);
             btnBrowseFolder.Size = new Size(S(75), CTRL_HEIGHT);
             btnBrowseFolder.Click += BtnBrowseFolder_Click;
@@ -210,7 +210,7 @@ namespace WordTools.Forms
 
         private void CreateDivider(ref int topPos)
         {
-            var divider = Theme.CreateDivider(FORM_WIDTH - MARGIN * 2);
+            var divider = UiToolkit.CreateDivider(FORM_WIDTH - MARGIN * 2);
             divider.Location = new DrawingPoint(MARGIN, topPos);
             Controls.Add(divider);
             topPos += 1 + S(Theme.Layout.DividerPaddingBottom);
@@ -386,19 +386,19 @@ namespace WordTools.Forms
 
         private void CreateActionButtonsRow(ref int topPos)
         {
-            btnInsertFromFolder = Theme.CreateButton("插入文件夹", Theme.ButtonStyle.Success);
+            btnInsertFromFolder = UiToolkit.CreateButton("插入文件夹", UiToolkit.ButtonStyle.Success);
             btnInsertFromFolder.Location = new DrawingPoint(S(15), topPos);
             btnInsertFromFolder.Size = new Size(S(100), CTRL_HEIGHT);
             btnInsertFromFolder.Click += BtnInsertFromFolder_Click;
             Controls.Add(btnInsertFromFolder);
 
-            btnSelectFiles = Theme.CreateButton("选择文件", Theme.ButtonStyle.Primary);
+            btnSelectFiles = UiToolkit.CreateButton("选择文件", UiToolkit.ButtonStyle.Primary);
             btnSelectFiles.Location = new DrawingPoint(S(125), topPos);
             btnSelectFiles.Size = new Size(S(100), CTRL_HEIGHT);
             btnSelectFiles.Click += BtnSelectFiles_Click;
             Controls.Add(btnSelectFiles);
 
-            btnCancel = Theme.CreateButton("取消", Theme.ButtonStyle.Default);
+            btnCancel = UiToolkit.CreateButton("取消", UiToolkit.ButtonStyle.Default);
             btnCancel.Location = new DrawingPoint(S(380), topPos);
             btnCancel.Size = new Size(S(80), CTRL_HEIGHT);
             btnCancel.DialogResult = DialogResult.Cancel;
@@ -529,7 +529,7 @@ namespace WordTools.Forms
                 lastPath = txtFolderPath.Text;
             }
 
-            string folderPath = FileService.SelectFolder("请选择文件夹...", lastPath);
+            string folderPath = SelectFolder("请选择文件夹...", lastPath);
             if (!string.IsNullOrEmpty(folderPath))
             {
                 txtFolderPath.Text = folderPath;
@@ -606,7 +606,7 @@ namespace WordTools.Forms
             try
             {
                 string lastPath = ConfigService.GetLastFolderPath();
-                var selectedFiles = FileService.SelectImageFiles("请选择图片文件...", lastPath);
+                var selectedFiles = SelectImageFiles("请选择图片文件...", lastPath);
                 if (selectedFiles == null || selectedFiles.Length == 0)
                 {
                     return;
@@ -652,6 +652,48 @@ namespace WordTools.Forms
                 MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private string SelectFolder(string dialogTitle = "请选择文件夹...", string initialPath = "")
+        {
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = dialogTitle;
+                dialog.ShowNewFolderButton = false;
+
+                if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
+                {
+                    dialog.SelectedPath = initialPath;
+                }
+
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    return dialog.SelectedPath;
+                }
+            }
+            return string.Empty;
+        }
+
+        private string[] SelectImageFiles(string dialogTitle = "请选择图片文件...", string initialPath = "")
+        {
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Title = dialogTitle;
+                dialog.Multiselect = true;
+                dialog.Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*";
+                dialog.FilterIndex = 1;
+
+                if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
+                {
+                    dialog.InitialDirectory = initialPath;
+                }
+
+                if (dialog.ShowDialog() == DialogResult.OK && dialog.FileNames.Length > 0)
+                {
+                    return dialog.FileNames;
+                }
+            }
+            return null;
         }
 
         #endregion

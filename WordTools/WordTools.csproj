@@ -135,6 +135,7 @@
     <Compile Include="Forms\ProgressForm.cs" />
     <Compile Include="Forms\FailureDetailsForm.cs" />
     <Compile Include="Theme.cs" />
+    <Compile Include="UiToolkit.cs" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

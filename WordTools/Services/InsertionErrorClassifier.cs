@@ -113,5 +113,11 @@ namespace WordTools.Services
             return errorMessage.IndexOf("合并", StringComparison.OrdinalIgnoreCase) >= 0
                 || errorMessage.IndexOf("merge", StringComparison.OrdinalIgnoreCase) >= 0;
         }
+
+        public static bool IsMergedCellError(Exception ex)
+        {
+            if (ex == null) return false;
+            return IsMergedCellError(ex.Message);
+        }
     }
 }

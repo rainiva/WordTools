@@ -92,7 +92,7 @@ namespace WordTools.Forms
             this.Controls.Add(txtExcelPath);
 
             // 浏览按钮：高度与输入框自动高度对齐
-            btnBrowse = Theme.CreateButton("浏览...", Theme.ButtonStyle.Default);
+            btnBrowse = UiToolkit.CreateButton("浏览...", UiToolkit.ButtonStyle.Default);
             btnBrowse.Size = new Size(BUTTON_WIDTH, CTRL_HEIGHT);
             btnBrowse.Location = new Point(FORM_WIDTH - MARGIN - BUTTON_WIDTH, topPos);
             btnBrowse.Click += btnBrowse_Click;
@@ -179,7 +179,7 @@ namespace WordTools.Forms
             topPos += S(Theme.Layout.CtrlHeight + Theme.Layout.SectionSpacing);
 
             // ===== 分隔线 =====
-            Label separator = Theme.CreateDivider(FORM_WIDTH - MARGIN * 2);
+            Label separator = UiToolkit.CreateDivider(FORM_WIDTH - MARGIN * 2);
             separator.Location = new Point(MARGIN, topPos);
             this.Controls.Add(separator);
 
@@ -218,13 +218,13 @@ namespace WordTools.Forms
             int totalBtnWidth = btnWidth * 2 + btnGap;
             int btnStartX = (FORM_WIDTH - totalBtnWidth) / 2;
 
-            btnExecute = Theme.CreateButton("执行填充", Theme.ButtonStyle.Success);
+            btnExecute = UiToolkit.CreateButton("执行填充", UiToolkit.ButtonStyle.Success);
             btnExecute.Location = new Point(btnStartX, topPos);
             btnExecute.Size = new Size(btnWidth, btnHeight);
             btnExecute.Click += btnExecute_Click;
             this.Controls.Add(btnExecute);
 
-            btnCancel = Theme.CreateButton("取消", Theme.ButtonStyle.Default);
+            btnCancel = UiToolkit.CreateButton("取消", UiToolkit.ButtonStyle.Default);
             btnCancel.Location = new Point(btnStartX + btnWidth + btnGap, topPos);
             btnCancel.Size = new Size(btnWidth, btnHeight);
             btnCancel.DialogResult = DialogResult.Cancel;

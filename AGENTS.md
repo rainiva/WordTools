@@ -22,7 +22,7 @@
 
 | 环境 | 推荐工具 | 禁止 |
 |------|----------|------|
-| **Codex** | `apply_patch` 精确补丁 | 整文件回写、脚本读写 |
+| **Codex** | `Write` 精确补丁 | 整文件回写、脚本读写 |
 | **Cursor** | `StrReplace` / `Write` 精确补丁 | PowerShell 改源码、整文件覆盖 |
 
 对 `*.resx`、`*.Designer.cs`、含中文的 `*.xml` / `*.cs` 尤其谨慎；非必要不手改，必须改时只做最小变更。
@@ -65,7 +65,7 @@
 
 | 环境 | 读 skill | 编辑代码 | 任务跟踪 |
 |------|----------|----------|----------|
-| **Codex** | skill 工具 | `apply_patch` | 内置 todo |
+| **Codex** | skill 工具 | `Write` | 内置 todo |
 | **Cursor** | `Read` 读 skill 文件 | `StrReplace` / `Write` | `TodoWrite`、`Task` |
 
 "Add X" / "Fix Y" 不意味着跳过 brainstorming、debugging 等工作流。
