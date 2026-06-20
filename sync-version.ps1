@@ -131,11 +131,9 @@ Update-FileContent -Path $setupPath -ExpectedFragment $version -Transform {
 }
 
 $csprojPath = Join-Path $RepoRoot 'WordTools\WordTools.csproj'
-$versionParts = $version.Split('.')
-$applicationVersion = "$($versionParts[0]).$($versionParts[1]).$($versionParts[2]).*"
-Update-FileContent -Path $csprojPath -ExpectedFragment $applicationVersion -Transform {
+Update-FileContent -Path $csprojPath -ExpectedFragment $assemblyVersion -Transform {
     param($content)
-    return [regex]::Replace($content, '(<ApplicationVersion>)[^<]*(</ApplicationVersion>)', "`${1}$applicationVersion`${2}")
+    return [regex]::Replace($content, '(<ApplicationVersion>)[^<]*(</ApplicationVersion>)', "`${1}$assemblyVersion`${2}")
 }
 
 Write-Host "Synced version $version from version.json (assembly $assemblyVersion)" -ForegroundColor Green

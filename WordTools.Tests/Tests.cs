@@ -362,6 +362,25 @@ namespace WordTools.Tests
         }
 
         [Fact]
+        public void TestAboutVersionSyncedFromVersionJson()
+        {
+            string versionJson = ReadProjectSource("version.json");
+            var match = System.Text.RegularExpressions.Regex.Match(
+                versionJson,
+                "\"version\"\\s*:\\s*\"([^\"]+)\"");
+            Assert.True(match.Success, "version.json must contain a version field");
+            string semver = match.Groups[1].Value;
+
+            string assemblyInfo = ReadProjectSource(Path.Combine("WordTools", "Properties", "AssemblyInfo.cs"));
+            Assert.Contains(
+                "[assembly: AssemblyInformationalVersion(\"" + semver + "\")]",
+                assemblyInfo);
+
+            string appVersionInfo = ReadProjectSource(Path.Combine("WordTools", "AppVersionInfo.cs"));
+            Assert.Contains("AssemblyInformationalVersionAttribute", appVersionInfo);
+        }
+
+        [Fact]
         public void TestRibbonXmlExposesLoggingSettingsMenu()
         {
             string ribbonXmlPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Ribbon.xml");

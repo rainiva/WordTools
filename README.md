@@ -120,7 +120,7 @@ WordTools/
 | `.\sync-version.ps1 -Bump Major` | 主版本 +1（不兼容变更）→ **n+1**.0.0 |
 | `.\build-installer.ps1 -Bump Patch` | 先 bump 再构建安装包到 `dist/` |
 
-程序集 `AssemblyVersion` / `AssemblyFileVersion` 自动写为四段 `x.x.x.0`；UI 与安装包显示三段 semver。
+程序集 `AssemblyVersion` / `AssemblyFileVersion` 自动写为四段 `x.x.x.0`；Ribbon「关于」对话框与安装包显示 `AssemblyInformationalVersion`（三段 semver）。
 
 ## 开发环境要求
 
