@@ -135,3 +135,79 @@ def _host_smoke_ok(host_result: dict[str, Any], required: bool, mode: str) -> bo
         return bool(host_result.get("addin_loaded"))
 
     return bool(host_result.get("addin_loaded")) and bool(host_result.get("image_persisted"))
+
+
+def evaluate_batch_insert_case(case_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate a single batch-insert E2E case payload from BatchInsertE2E / Matrix.BatchInsert.ps1."""
+    base = {
+        "case_id": case_id,
+        "pass": False,
+        "details": [],
+    }
+
+    if not result.get("pass", False):
+        base["details"].append("host reported pass=false")
+        return base
+
+    warnings = [str(item) for item in result.get("warnings", [])]
+    inline_shape_count = int(result.get("inline_shape_count", -1))
+    success_count = int(result.get("success_count", -1))
+    fail_count = int(result.get("fail_count", 0))
+
+    if case_id == "AC-B01":
+        ok = inline_shape_count == 0 and any("请先选中一个表格" in w for w in warnings)
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected no shapes and table-selection warning")
+        return base
+
+    if case_id == "AC-B02":
+        ok = inline_shape_count == 0 and any("请将光标置于表格左侧单元格" in w for w in warnings)
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected no shapes and first-column warning")
+        return base
+
+    if case_id == "AC-B03":
+        ok = (
+            inline_shape_count == 4
+            and success_count == 4
+            and fail_count == 0
+            and bool(result.get("has_numbered_description"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected 4 shapes, success=4, numbered descriptions")
+        return base
+
+    if case_id == "AC-B04":
+        ok = (
+            inline_shape_count == 5
+            and success_count == 5
+            and bool(result.get("has_subfolder_title"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected 5 shapes, subfolder title row")
+        return base
+
+    if case_id == "AC-B05":
+        ok = (
+            inline_shape_count == 1
+            and success_count == 1
+            and str(result.get("last_image_row_col2_text", "")).strip() == "N/A"
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected 1 shape and col2 N/A")
+        return base
+
+    if case_id == "AC-B06":
+        ok = bool(result.get("cancelled")) and any("操作已取消" in w for w in warnings)
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected cancelled with cancel notification")
+        return base
+
+    base["details"].append(f"unknown case_id: {case_id}")
+    return base

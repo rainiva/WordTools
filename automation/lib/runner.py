@@ -34,6 +34,9 @@ class MatrixTestRunner:
         if self._phase_enabled("smoke"):
             report.add_layer("smoke", self._run_smoke_phase())
 
+        if self._phase_enabled("batch_insert"):
+            report.add_layer("batch_insert", self._run_batch_insert_phase())
+
         if self._phase_enabled("unregister"):
             report.add_layer("unregister", self._run_unregister_phase())
 
@@ -134,6 +137,45 @@ class MatrixTestRunner:
             host_target=smoke.get("host_target", "Both"),
         )
         return {**payload, **evaluation}
+
+    def _run_batch_insert_phase(self) -> dict[str, Any]:
+        from lib.expectations import evaluate_batch_insert_case
+
+        batch_insert = self.config.get("batch_insert", {})
+        cases = batch_insert.get("cases", [])
+        if not cases:
+            return {"pass": False, "error": "no_batch_insert_cases"}
+
+        visible = str(batch_insert.get("visible", "false"))
+        plugin = self.config.get("plugin", {})
+        configuration = plugin.get("configuration", "Release")
+        case_results = []
+
+        for case in cases:
+            case_id = case.get("case_id", "")
+            result = self._invoke(
+                "Matrix.BatchInsert.ps1",
+                {
+                    "RepoRoot": str(self.repo_root),
+                    "CaseId": case_id,
+                    "Visible": visible,
+                    "Configuration": configuration,
+                },
+            )
+            if result["exit_code"] != 0:
+                payload = result["payload"] if result["payload"] else {"pass": False, "stderr": result["stderr"]}
+                evaluation = evaluate_batch_insert_case(case_id, {**payload, "pass": False})
+                case_results.append({**payload, **evaluation, "case_name": case.get("case_name", "")})
+                continue
+
+            payload = result["payload"]
+            evaluation = evaluate_batch_insert_case(case_id, payload)
+            case_results.append({**payload, **evaluation, "case_name": case.get("case_name", "")})
+
+        return {
+            "pass": all(item.get("pass", False) for item in case_results),
+            "cases": case_results,
+        }
 
     def _run_unregister_phase(self) -> dict[str, Any]:
         plugin = self.config.get("plugin", {})

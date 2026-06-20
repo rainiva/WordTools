@@ -108,6 +108,10 @@
     <Compile Include="Services\Adapters\ProgressFormAdapter.cs" />
     <Compile Include="Services\Adapters\FailureDetailsFormAdapter.cs" />
     <Compile Include="Services\Adapters\MessageBoxNotificationService.cs" />
+    <Compile Include="Services\Adapters\HeadlessProgressReporter.cs" />
+    <Compile Include="Services\Adapters\CapturingNotificationService.cs" />
+    <Compile Include="Services\Adapters\NullFailureDetailsPresenter.cs" />
+    <Compile Include="Services\InsertPhotosExecutionServices.cs" />
     <Compile Include="Services\Adapters\WordDocumentContext.cs" />
     <Compile Include="Services\Adapters\WordApplicationContext.cs" />
     <Compile Include="Services\ConfigService.cs" />

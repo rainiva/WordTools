@@ -49,14 +49,17 @@ namespace WordTools.Services
 
         public void Execute(InsertPhotosRequest request)
         {
+            Execute(request, null);
+        }
+
+        public void Execute(InsertPhotosRequest request, InsertPhotosExecutionServices services)
+        {
             if (request == null)
             {
                 return;
             }
 
             var appContext = new WordApplicationContext(_application);
-            var notificationService = new MessageBoxNotificationService();
-            var failureDetailsPresenter = new FailureDetailsFormAdapter();
 
             int totalFiles = request.Mode == InsertPhotosRequestMode.Folder
                 ? FileService.CountTotalImageFiles(
@@ -65,12 +68,13 @@ namespace WordTools.Services
                     request.IncludeSubFolderImages)
                 : (request.SelectedFiles?.Length ?? 0);
 
-            var progressReporter = new ProgressFormAdapter(totalFiles);
+            services = services ?? CreateDefaultServices(totalFiles);
+
             var progressService = new ProgressService(
                 appContext,
-                progressReporter,
-                failureDetailsPresenter,
-                notificationService);
+                services.ProgressReporter,
+                services.FailureDetailsPresenter,
+                services.NotificationService);
 
             if (request.Mode == InsertPhotosRequestMode.Folder)
             {
@@ -129,6 +133,16 @@ namespace WordTools.Services
             };
 
             timer.Start();
+        }
+
+        private static InsertPhotosExecutionServices CreateDefaultServices(int totalFiles)
+        {
+            return new InsertPhotosExecutionServices
+            {
+                ProgressReporter = new ProgressFormAdapter(totalFiles),
+                NotificationService = new MessageBoxNotificationService(),
+                FailureDetailsPresenter = new FailureDetailsFormAdapter()
+            };
         }
     }
 }

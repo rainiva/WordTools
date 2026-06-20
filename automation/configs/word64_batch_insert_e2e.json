@@ -1,0 +1,43 @@
+{
+  "env_name": "word64_batch_insert_e2e",
+  "plugin": {
+    "configuration": "Release",
+    "prog_id": "WordTools.ThisAddIn",
+    "word_architecture": "x64"
+  },
+  "hosts": {
+    "word": { "enabled": true, "expected_bitness": "64" },
+    "wps": { "enabled": false, "expected_bitness": "32" }
+  },
+  "phases": {
+    "probe": true,
+    "register": false,
+    "verify_registration": false,
+    "smoke": false,
+    "batch_insert": true,
+    "unregister": false,
+    "verify_cleanup": false
+  },
+  "batch_insert": {
+    "visible": "false",
+    "cases": [
+      { "case_id": "AC-B01", "case_name": "guard-not-in-table" },
+      { "case_id": "AC-B02", "case_name": "guard-not-first-column" },
+      { "case_id": "AC-B03", "case_name": "selected-four-numbered" },
+      { "case_id": "AC-B04", "case_name": "folder-root-and-sub" },
+      { "case_id": "AC-B05", "case_name": "single-image-na" },
+      { "case_id": "AC-B06", "case_name": "cancel-mid-batch" }
+    ]
+  },
+  "test_assets": {
+    "docx": "assets/table-template.docx",
+    "image": "assets/test-small.jpg",
+    "selected_four_dir": "assets/images/selected-4",
+    "folder_root_dir": "assets/images/folder-root",
+    "single_image": "assets/images/single/01.jpg"
+  },
+  "output": {
+    "report_dir": "reports/word64_batch_insert_e2e",
+    "screenshot_dir": "screenshots/word64_batch_insert_e2e"
+  }
+}

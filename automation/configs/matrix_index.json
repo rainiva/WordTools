@@ -66,6 +66,11 @@
       "purpose": "word64_primary_regression"
     },
     {
+      "name": "word64_batch_insert_e2e",
+      "config": "configs/word64_batch_insert_e2e.json",
+      "purpose": "batch_insert_orchestrator_e2e"
+    },
+    {
       "name": "word64_wps64",
       "config": "configs/word64_wps64.json",
       "purpose": "full_matrix_word64_wps64"
