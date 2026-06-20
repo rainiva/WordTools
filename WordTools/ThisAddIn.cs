@@ -1,12 +1,10 @@
 using System;
 using System.IO;
 using System.Reflection;
-using System.Windows.Forms;
 using Word = Microsoft.Office.Interop.Word;
 using Extensibility;
 using System.Runtime.InteropServices;
 using Office = Microsoft.Office.Core;
-using WordTools.Forms;
 using WordTools.Services;
 
 namespace WordTools
@@ -18,6 +16,7 @@ namespace WordTools
     public partial class ThisAddIn : IDTExtensibility2, Office.IRibbonExtensibility
     {
         private Office.IRibbonUI ribbonUI;
+        private readonly RibbonController _ribbonController = new RibbonController();
         private static readonly string _ribbonXml = LoadRibbonXml();
 
         /// <summary>
@@ -109,34 +108,27 @@ namespace WordTools
         public void Ribbon_Load(Office.IRibbonUI ribbonUI)
         {
             this.ribbonUI = ribbonUI;
+            _ribbonController.OnRibbonLoad(ribbonUI);
         }
 
-        /// <summary>
-        /// 刷新 Ribbon 状态
-        /// </summary>
         public void InvalidateRibbon()
         {
-            if (ribbonUI != null)
-            {
-                ribbonUI.Invalidate();
-            }
+            _ribbonController.InvalidateRibbon();
         }
 
         public bool GetDetailedLoggingPressed(Office.IRibbonControl control)
         {
-            return ConfigService.GetDetailedLoggingEnabled();
+            return _ribbonController.GetDetailedLoggingPressed(control);
         }
 
         public bool GetBenchmarkLoggingPressed(Office.IRibbonControl control)
         {
-            return LoggingOptionsStateController.Normalize(
-                ConfigService.GetDetailedLoggingEnabled(),
-                ConfigService.GetBenchmarkLoggingEnabled()).BenchmarkLoggingEnabled;
+            return _ribbonController.GetBenchmarkLoggingPressed(control);
         }
 
         public bool GetBenchmarkLoggingEnabled(Office.IRibbonControl control)
         {
-            return ConfigService.GetDetailedLoggingEnabled();
+            return _ribbonController.GetBenchmarkLoggingEnabled(control);
         }
 
         #region 按钮点击回调
@@ -146,48 +138,22 @@ namespace WordTools
         /// </summary>
         public void OnInsertPhotosClick(Office.IRibbonControl control)
         {
-            ShowInsertPhotosForm();
+            new InsertPhotosOrchestrator(Globals.Application).ShowFormAndExecuteIfConfirmed();
         }
 
         public void OnShowLoggingSettingsSummary(Office.IRibbonControl control)
         {
-            var state = LoggingOptionsStateController.Normalize(
-                ConfigService.GetDetailedLoggingEnabled(),
-                ConfigService.GetBenchmarkLoggingEnabled());
-
-            string message =
-                "当前日志设置：\n\n" +
-                "详细日志：" + (state.DetailedLoggingEnabled ? "已开启" : "已关闭") + "\n" +
-                "性能基准 CSV：" + (state.BenchmarkLoggingEnabled ? "已开启" : "已关闭") + "\n\n" +
-                "提示：点击右侧下拉箭头可直接调整这两项设置。";
-
-            MessageBox.Show(
-                message,
-                "日志设置",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            _ribbonController.OnShowLoggingSettingsSummary(control);
         }
 
         public void OnToggleDetailedLogging(Office.IRibbonControl control, bool pressed)
         {
-            var state = LoggingOptionsStateController.Normalize(
-                pressed,
-                ConfigService.GetBenchmarkLoggingEnabled());
-
-            ConfigService.SaveDetailedLoggingEnabled(state.DetailedLoggingEnabled);
-            ConfigService.SaveBenchmarkLoggingEnabled(state.BenchmarkLoggingEnabled);
-            InvalidateRibbon();
+            _ribbonController.OnToggleDetailedLogging(control, pressed);
         }
 
         public void OnToggleBenchmarkLogging(Office.IRibbonControl control, bool pressed)
         {
-            var state = LoggingOptionsStateController.Normalize(
-                ConfigService.GetDetailedLoggingEnabled(),
-                pressed);
-
-            ConfigService.SaveDetailedLoggingEnabled(state.DetailedLoggingEnabled);
-            ConfigService.SaveBenchmarkLoggingEnabled(state.BenchmarkLoggingEnabled);
-            InvalidateRibbon();
+            _ribbonController.OnToggleBenchmarkLogging(control, pressed);
         }
 
         /// <summary>
@@ -195,13 +161,7 @@ namespace WordTools
         /// </summary>
         public void OnAboutClick(Office.IRibbonControl control)
         {
-            MessageBox.Show(
-                "Word工具箱 v1.0\n\n" +
-                "功能：批量插图、自动编号\n\n" +
-                "© 2026",
-                "关于",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            _ribbonController.OnAboutClick(control);
         }
 
         /// <summary>
@@ -209,71 +169,10 @@ namespace WordTools
         /// </summary>
         public void OnRefreshNumberingClick(Office.IRibbonControl control)
         {
-            try
-            {
-                if (Application == null || Application.ActiveDocument == null)
-                {
-                    MessageBox.Show("请先打开一个 Word 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var doc = Application.ActiveDocument;
-                var selection = Application.Selection;
-
-                if (!Services.TableService.IsSelectionInTable(selection))
-                {
-                    MessageBox.Show("请先将光标放在需要刷新编号的表格中", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var tbl = Services.TableService.GetCurrentTable(selection);
-                if (tbl == null)
-                {
-                    MessageBox.Show("无法获取当前表格", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                // 刷新表格编号（带进度提示，ScreenUpdating 由 TableService 内部控制）
-                Application.StatusBar = "正在刷新编号...";
-                System.Windows.Forms.Application.DoEvents();
-
-                Services.TableService.RefreshTableNumbering(tbl, doc, 2, (status) =>
-                {
-                    try
-                    {
-                        Application.StatusBar = status;
-                        System.Windows.Forms.Application.DoEvents();
-                    }
-                    catch { }
-                });
-
-                // 确保域代码不可见
-                try
-                {
-                    if (doc.ActiveWindow.View.ShowFieldCodes)
-                        doc.ActiveWindow.View.ShowFieldCodes = false;
-                }
-                catch { }
-
-                Application.StatusBar = "";
-                // 确保UI完全刷新后再显示提示框
-                // 使用后台线程延迟，避免阻塞UI线程
-                var t = new System.Threading.Thread(() =>
-                {
-                    System.Threading.Thread.Sleep(300);
-                });
-                t.Start();
-                while (t.IsAlive)
-                {
-                    System.Windows.Forms.Application.DoEvents();
-                    System.Threading.Thread.Sleep(10);
-                }
-                MessageBox.Show("表格编号已刷新完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(string.Format("刷新编号失败: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
+            var notificationService = new Services.Adapters.MessageBoxNotificationService();
+            var numberingRefreshService = new Services.NumberingRefreshService(appContext, notificationService);
+            numberingRefreshService.RefreshFromCurrentSelection();
         }
 
         /// <summary>
@@ -281,108 +180,7 @@ namespace WordTools
         /// </summary>
         public void OnExcelDataFillerClick(Office.IRibbonControl control)
         {
-            try
-            {
-                Forms.ExcelDataFillerForm form = new Forms.ExcelDataFillerForm();
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(string.Format("打开Excel数据填充工具失败: {0}", ex.Message),
-                               "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        #endregion
-
-        #region 窗体显示
-
-        /// <summary>
-        /// 显示批量插图主窗体
-        /// </summary>
-        public void ShowInsertPhotosForm()
-        {
-            try
-            {
-                InsertPhotosRequest pendingRequest = null;
-                using (var form = new InsertPhotosForm(Globals.Application))
-                {
-                    if (form.ShowDialog() == DialogResult.OK)
-                    {
-                        pendingRequest = form.PendingRequest;
-                    }
-                }
-
-                if (pendingRequest != null)
-                {
-                    ExecuteInsertPhotosRequestDeferred(pendingRequest);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    "打开窗体失败: " + ex.Message,
-                    "错误",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-            }
-        }
-
-        private void ExecuteInsertPhotosRequest(InsertPhotosRequest request)
-        {
-            if (request == null)
-            {
-                return;
-            }
-
-            var progressService = new ProgressService(Globals.Application);
-            if (request.Mode == InsertPhotosRequestMode.Folder)
-            {
-                progressService.InsertPhotosWithProgress(
-                    request.FolderPath,
-                    request.MinHeight,
-                    request.NeedDescription,
-                    request.UseFileNameAsDescription,
-                    request.UseFolderNameAsDescription,
-                    request.IncludeRootImages,
-                    request.IncludeSubFolderImages,
-                    request.NeedAutoNumbering,
-                    request.NumberAlignment,
-                    request.NumberPosition);
-                return;
-            }
-
-            progressService.InsertSelectedPhotosWithProgress(
-                request.SelectedFiles,
-                request.MinHeight,
-                request.NeedDescription,
-                request.UseFileNameAsDescription,
-                request.UseFolderNameAsDescription,
-                request.NeedAutoNumbering,
-                request.NumberAlignment,
-                request.NumberPosition);
-        }
-
-        private void ExecuteInsertPhotosRequestDeferred(InsertPhotosRequest request)
-        {
-            if (request == null)
-            {
-                return;
-            }
-
-            var invoker = new Control();
-            invoker.CreateControl();
-            invoker.BeginInvoke(new Action(() =>
-            {
-                try
-                {
-                    ExecuteInsertPhotosRequest(request);
-                }
-                finally
-                {
-                    invoker.Dispose();
-                }
-            }));
+            new ExcelDataFillerOrchestrator(Globals.Application).ShowForm();
         }
 
         #endregion

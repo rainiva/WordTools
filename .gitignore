@@ -20,6 +20,10 @@ packages/
 ## 发布输出
 publish/
 
+## 安装包输出
+dist/
+Output/
+
 ## 测试项目输出
 TestResults/
 
@@ -40,3 +44,18 @@ Desktop.ini
 
 ## Qoder IDE
 .qoder/
+
+## 自动化测试输出
+automation/reports/
+automation/screenshots/
+automation/.pytest_cache/
+automation/**/__pycache__/
+automation/**/*.pyc
+
+## 代码分析与规划生成产物
+.codegraph/
+graphify-out/
+WordTools/graphify-out/
+nul
+plan-output.json
+probe-output.json

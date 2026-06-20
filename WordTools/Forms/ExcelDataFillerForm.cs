@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 using WordTools.Services;
+using WordTools.Services.Abstractions;
+using WordTools.Services.Adapters;
 using Theme = WordTools.Theme;
 
 namespace WordTools.Forms
@@ -36,10 +38,18 @@ namespace WordTools.Forms
         private int FORM_WIDTH;
         private float dpiScale = 1f;
 
-        public ExcelDataFillerForm()
+        private readonly IDocumentContext _documentContext;
+        private readonly INotificationService _notificationService;
+        private bool _isExecuting;
+
+        public ExcelDataFillerForm(IDocumentContext documentContext, INotificationService notificationService)
         {
+            _documentContext = documentContext;
+            _notificationService = notificationService;
             InitializeComponent();
-            fillerService = new EDF_DataFillerService();
+
+            var appContext = new WordApplicationContext(_documentContext.ActiveDocument?.Application);
+            fillerService = new EDF_DataFillerService(_documentContext, _notificationService, appContext);
         }
 
         private void InitializeComponent()
@@ -82,7 +92,7 @@ namespace WordTools.Forms
             this.Controls.Add(txtExcelPath);
 
             // 浏览按钮：高度与输入框自动高度对齐
-            btnBrowse = Theme.CreateButton("浏览...", Theme.ButtonStyle.Default);
+            btnBrowse = UiToolkit.CreateButton("浏览...", UiToolkit.ButtonStyle.Default);
             btnBrowse.Size = new Size(BUTTON_WIDTH, CTRL_HEIGHT);
             btnBrowse.Location = new Point(FORM_WIDTH - MARGIN - BUTTON_WIDTH, topPos);
             btnBrowse.Click += btnBrowse_Click;
@@ -169,7 +179,7 @@ namespace WordTools.Forms
             topPos += S(Theme.Layout.CtrlHeight + Theme.Layout.SectionSpacing);
 
             // ===== 分隔线 =====
-            Label separator = Theme.CreateDivider(FORM_WIDTH - MARGIN * 2);
+            Label separator = UiToolkit.CreateDivider(FORM_WIDTH - MARGIN * 2);
             separator.Location = new Point(MARGIN, topPos);
             this.Controls.Add(separator);
 
@@ -208,13 +218,13 @@ namespace WordTools.Forms
             int totalBtnWidth = btnWidth * 2 + btnGap;
             int btnStartX = (FORM_WIDTH - totalBtnWidth) / 2;
 
-            btnExecute = Theme.CreateButton("执行填充", Theme.ButtonStyle.Success);
+            btnExecute = UiToolkit.CreateButton("执行填充", UiToolkit.ButtonStyle.Success);
             btnExecute.Location = new Point(btnStartX, topPos);
             btnExecute.Size = new Size(btnWidth, btnHeight);
             btnExecute.Click += btnExecute_Click;
             this.Controls.Add(btnExecute);
 
-            btnCancel = Theme.CreateButton("取消", Theme.ButtonStyle.Default);
+            btnCancel = UiToolkit.CreateButton("取消", UiToolkit.ButtonStyle.Default);
             btnCancel.Location = new Point(btnStartX + btnWidth + btnGap, topPos);
             btnCancel.Size = new Size(btnWidth, btnHeight);
             btnCancel.DialogResult = DialogResult.Cancel;
@@ -225,6 +235,9 @@ namespace WordTools.Forms
 
             // 加载默认配置
             LoadDefaultConfig();
+
+            // 执行期间阻止用户关闭窗体
+            this.FormClosing += ExcelDataFillerForm_FormClosing;
         }
 
         /// <summary>
@@ -262,10 +275,11 @@ namespace WordTools.Forms
         {
             try
             {
-                return Globals.ThisAddIn.Application.ActiveDocument;
+                return _documentContext.ActiveDocument;
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[ExcelDataFillerForm] GetActiveDocument error: {ex.Message}");
                 return null;
             }
         }
@@ -318,7 +332,7 @@ namespace WordTools.Forms
             int targetColumn;
             if (!int.TryParse(txtTargetColumn.Text.Trim(), out targetColumn))
             {
-                MessageBox.Show("请输入有效的目标列数字！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入有效的目标列数字！", "提示");
                 return;
             }
 
@@ -328,6 +342,7 @@ namespace WordTools.Forms
             // 禁用按钮，防止重复点击
             btnExecute.Enabled = false;
             btnCancel.Enabled = false;
+            _isExecuting = true;
 
             UpdateStatus("开始执行...\r\n正在检测表格结构...");
 
@@ -346,13 +361,15 @@ namespace WordTools.Forms
                     });
 
                 AppendStatus("填充完成！");
-                btnExecute.Enabled = true;
-                btnCancel.Enabled = true;
             }
             catch (Exception ex)
             {
                 AppendStatus("错误: " + ex.Message);
-                MessageBox.Show(string.Format("执行出错: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError(string.Format("执行出错: {0}", ex.Message), "错误");
+            }
+            finally
+            {
+                _isExecuting = false;
                 btnExecute.Enabled = true;
                 btnCancel.Enabled = true;
             }
@@ -365,28 +382,28 @@ namespace WordTools.Forms
         {
             if (string.IsNullOrWhiteSpace(txtExcelPath.Text))
             {
-                MessageBox.Show("请选择Excel文件！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请选择Excel文件！", "提示");
                 txtExcelPath.Focus();
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(txtAnchorField.Text))
             {
-                MessageBox.Show("请输入锚定字段！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入锚定字段！", "提示");
                 txtAnchorField.Focus();
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(txtTargetColumn.Text) || !int.TryParse(txtTargetColumn.Text, out int _))
             {
-                MessageBox.Show("请输入有效的目标列数字！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入有效的目标列数字！", "提示");
                 txtTargetColumn.Focus();
                 return false;
             }
 
             if (chkReplaceSampleSize.Checked && string.IsNullOrWhiteSpace(txtSampleSizeColumn.Text))
             {
-                MessageBox.Show("请输入Sample Size所在列！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                _notificationService.ShowWarning("请输入Sample Size所在列！", "提示");
                 txtSampleSizeColumn.Focus();
                 return false;
             }
@@ -432,6 +449,18 @@ namespace WordTools.Forms
             txtStatus.SelectionStart = txtStatus.Text.Length;
             txtStatus.ScrollToCaret();
             Application.DoEvents();
+        }
+        /// <summary>
+        /// 执行期间阻止用户关闭窗体，防止后台任务与窗体生命周期耦合问题
+        /// </summary>
+        private void ExcelDataFillerForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (_isExecuting && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                MessageBox.Show("操作正在进行中，请等待完成后再关闭窗口。", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
     }
 }

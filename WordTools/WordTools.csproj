@@ -24,7 +24,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <ApplicationVersion>1.3.0.0</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <SignManifests>false</SignManifests>
@@ -37,7 +37,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -46,6 +46,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
@@ -62,12 +63,14 @@
     <Reference Include="Extensibility" />
     <Reference Include="Microsoft.Office.Interop.Word">
       <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Office15\Microsoft.Office.Interop.Word.dll</HintPath>
+      <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Office16\Microsoft.Office.Interop.Word.dll</HintPath>
       <EmbedInteropTypes>true</EmbedInteropTypes>
       <Private>False</Private>
     </Reference>
 
     <Reference Include="Office">
       <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Office15\Office.dll</HintPath>
+      <HintPath>$(MSBuildExtensionsPath)\..\..\Visual Studio Tools for Office\PIA\Office16\Office.dll</HintPath>
       <EmbedInteropTypes>true</EmbedInteropTypes>
       <Private>False</Private>
     </Reference>
@@ -85,11 +88,28 @@
     <Compile Include="ThisAddIn.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="RibbonController.cs" />
     <Compile Include="ThisAddIn.Designer.cs">
       <DependentUpon>ThisAddIn.cs</DependentUpon>
     </Compile>
+    <Compile Include="AppVersionInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
 
+    <Compile Include="Services\Abstractions\IProgressReporter.cs" />
+    <Compile Include="Services\Abstractions\ITableService.cs" />
+    <Compile Include="Services\Abstractions\ITableNumberingService.cs" />
+    <Compile Include="Services\Abstractions\IConfigService.cs" />
+    <Compile Include="Services\Abstractions\IFileService.cs" />
+    <Compile Include="Services\Abstractions\IBenchmarkLogService.cs" />
+    <Compile Include="Services\Abstractions\IFailureDetailsPresenter.cs" />
+    <Compile Include="Services\Abstractions\INotificationService.cs" />
+    <Compile Include="Services\Abstractions\IDocumentContext.cs" />
+    <Compile Include="Services\Abstractions\IWordApplicationContext.cs" />
+    <Compile Include="Services\Adapters\ProgressFormAdapter.cs" />
+    <Compile Include="Services\Adapters\FailureDetailsFormAdapter.cs" />
+    <Compile Include="Services\Adapters\MessageBoxNotificationService.cs" />
+    <Compile Include="Services\Adapters\WordDocumentContext.cs" />
+    <Compile Include="Services\Adapters\WordApplicationContext.cs" />
     <Compile Include="Services\ConfigService.cs" />
     <Compile Include="Services\BenchmarkLogService.cs" />
     <Compile Include="Services\FileService.cs" />
@@ -97,11 +117,20 @@
     <Compile Include="Services\ImageInsertionBatchContext.cs" />
     <Compile Include="Services\ImageRowPlanner.cs" />
     <Compile Include="Services\InsertionPerformanceDiagnostics.cs" />
+    <Compile Include="Services\InsertionResultPresenter.cs" />
     <Compile Include="Services\InsertionSummaryFormatter.cs" />
     <Compile Include="Services\LoggingOptionsStateController.cs" />
     <Compile Include="Services\ProgressFormStateController.cs" />
+    <Compile Include="Services\ExcelDataFillerOrchestrator.cs" />
+    <Compile Include="Services\InsertPhotosOrchestrator.cs" />
+    <Compile Include="Services\NumberingRefreshService.cs" />
     <Compile Include="Services\TableService.cs" />
+    <Compile Include="Services\TableNumberingService.cs" />
     <Compile Include="Services\ProgressService.cs" />
+    <Compile Include="Services\InsertionErrorClassifier.cs" />
+    <Compile Include="Services\WindowActivationService.cs" />
+    <Compile Include="Services\EscapeKeyMonitor.cs" />
+    <Compile Include="Services\HighPerformanceModeController.cs" />
     <Compile Include="Services\EDF_DataFillerService.cs" />
     <Compile Include="Services\EDF_TemplateDetector.cs" />
     <Compile Include="Forms\InsertPhotosForm.cs" />
@@ -109,6 +138,7 @@
     <Compile Include="Forms\ProgressForm.cs" />
     <Compile Include="Forms\FailureDetailsForm.cs" />
     <Compile Include="Theme.cs" />
+    <Compile Include="UiToolkit.cs" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

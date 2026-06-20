@@ -1,8 +1,11 @@
 ; Word工具箱 - Inno Setup 安装脚本
 ; 当前版本仅正式支持 64 位 Microsoft Word。
 
+; MyAppVersion is synced from version.json via sync-version.ps1.
+#ifndef MyAppVersion
+  #define MyAppVersion "1.3.0"
+#endif
 #define MyAppName "Word工具箱"
-#define MyAppVersion "1.2.0.0"
 #define MyAppPublisher "WordTools"
 #define MyAppProgId "WordTools.ThisAddIn"
 #define MyAppDLL "WordTools.dll"
@@ -29,7 +32,7 @@
   #define OutputBaseName "WordToolbox_Setup_x64"
   #define DefaultDirNameValue "{autopf64}\WordToolbox"
   #define ArchitecturesAllowedValue "x64compatible"
-  #define RegAsmDirectory "{dotnet4064}"
+  #define RegAsmDirectory "{win}\Microsoft.NET\Framework64\v4.0.30319"
 #endif
 
 [Setup]
@@ -45,7 +48,7 @@ ArchitecturesAllowed={#ArchitecturesAllowedValue}
 #if Defined(ARCH_X64)
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
-OutputDir=Output
+OutputDir=dist
 OutputBaseFilename={#OutputBaseName}
 Compression=lzma
 SolidCompression=yes
@@ -68,10 +71,10 @@ Source: "INSTALLATION.md"; DestDir: "{app}"; DestName: "安装说明.txt"; Flags
 
 [Registry]
 #if Defined(ARCH_X64)
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: string; ValueName: "FriendlyName"; ValueData: "Word工具箱"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: string; ValueName: "Description"; ValueData: "Word工具箱插件"
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "0"
+Root: HKLM; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: string; ValueName: "FriendlyName"; ValueData: "Word工具箱"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: string; ValueName: "Description"; ValueData: "Word工具箱插件"
+Root: HKLM; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"
+Root: HKLM; Subkey: "Software\Microsoft\Office\Word\Addins\{#MyAppProgId}"; ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "0"
 #endif
 
 [Run]

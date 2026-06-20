@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "description": "Word/WPS 位数组合测试矩阵。Word 32/64 不能共存，WPS 32/64 不能共存；Word 与 WPS 可共存。",
+  "environments": [
+    {
+      "id": "VM-01",
+      "name": "word32_wps32",
+      "config": "configs/word32_wps32.json",
+      "word_bitness": "32",
+      "wps_bitness": "32",
+      "word_support": "planned",
+      "wps_support": "planned",
+      "note": "当前阶段最小矩阵：Word 32 + WPS 32"
+    },
+    {
+      "id": "VM-02",
+      "name": "word32_wps64",
+      "config": "configs/word32_wps64.json",
+      "word_bitness": "32",
+      "wps_bitness": "64",
+      "word_support": "planned",
+      "wps_support": "planned",
+      "note": "当前阶段最小矩阵：Word 32 + WPS 64"
+    },
+    {
+      "id": "VM-03",
+      "name": "word64_wps32",
+      "config": "configs/word64_wps32.json",
+      "word_bitness": "64",
+      "wps_bitness": "32",
+      "word_support": "supported",
+      "wps_support": "experimental",
+      "current_vm": true,
+      "note": "当前唯一可用 VM：Word 64 + WPS 32。先用 setup-vm-word64-wps32.ps1 搭建项目环境。"
+    },
+    {
+      "id": "VM-04",
+      "name": "word64_wps64",
+      "config": "configs/word64_wps64.json",
+      "word_bitness": "64",
+      "wps_bitness": "64",
+      "word_support": "supported",
+      "wps_support": "planned",
+      "note": "完整矩阵：Word 64 + WPS 64（WPS 64 待适配）"
+    }
+  ],
+  "word64_variants": [
+    {
+      "name": "word64_wps32",
+      "config": "configs/word64_wps32.json",
+      "purpose": "preview_full_pipeline"
+    },
+    {
+      "name": "word64_wps32_com_smoke",
+      "config": "configs/word64_wps32_com_smoke.json",
+      "purpose": "com_load_smoke"
+    },
+    {
+      "name": "word64_wps32_live_register",
+      "config": "configs/word64_wps32_live_register.json",
+      "purpose": "live_register_vm_only"
+    },
+    {
+      "name": "word64_only",
+      "config": "configs/word64_only.json",
+      "purpose": "word64_primary_regression"
+    },
+    {
+      "name": "word64_wps64",
+      "config": "configs/word64_wps64.json",
+      "purpose": "full_matrix_word64_wps64"
+    }
+  ]
+}

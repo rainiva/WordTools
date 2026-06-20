@@ -22,6 +22,16 @@ namespace WordTools.Forms
             get { return _stateController.IsCancelled; }
         }
 
+        /// <summary>
+        /// 用户在操作进行期间尝试关闭窗口（点击 X），已转换为取消请求。
+        /// </summary>
+        public bool IsCloseRequestedByUser { get; private set; }
+
+        /// <summary>
+        /// 由服务代码主动触发关闭（而非用户点击 X）。
+        /// </summary>
+        public bool IsServiceClosing { get; set; }
+
         public ProgressForm(int totalFiles)
         {
             InitializeComponent(totalFiles);
@@ -85,6 +95,45 @@ namespace WordTools.Forms
             btnCancel.FlatAppearance.BorderSize = 0;
             btnCancel.Click += btnCancel_Click;
             this.Controls.Add(btnCancel);
+
+            this.FormClosing += ProgressForm_FormClosing;
+        }
+
+        /// <summary>
+        /// 用户在操作进行期间点击右上角 X 时，视为取消请求，禁止直接关闭窗口。
+        /// </summary>
+        private void ProgressForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // 服务代码主动关闭时不拦截，也不提示
+            if (IsServiceClosing)
+            {
+                return;
+            }
+
+            if (e.CloseReason == CloseReason.UserClosing && !_stateController.IsCompleted)
+            {
+                e.Cancel = true;
+
+                // 已经在取消过程中，仅提示用户
+                if (_stateController.IsCancelled)
+                {
+                    MessageBox.Show("正在取消当前操作，请稍候...", "提示",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var result = MessageBox.Show("操作正在进行中，是否取消？", "确认取消",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result != DialogResult.Yes)
+                {
+                    return;
+                }
+
+                IsCloseRequestedByUser = true;
+                _stateController.HandleButtonClick();
+                btnCancel.Enabled = _stateController.IsButtonEnabled;
+                btnCancel.Text = _stateController.ButtonText;
+            }
         }
 
         /// <summary>
@@ -108,11 +157,12 @@ namespace WordTools.Forms
         }
 
         /// <summary>
-        /// 显示完成状态（使用 BeginInvoke 避免阻塞）
+        /// 显示完成状态。使用 Invoke 同步执行，确保 MarkCompleted 在关闭窗口前生效，
+        /// 避免代码触发的 FormClosing 误判为进行中关闭。
         /// </summary>
         public void ShowCompletion(int successCount, int failCount, double totalSeconds)
         {
-            this.BeginInvoke(new Action(() =>
+            this.Invoke(new Action(() =>
             {
                 string timeInfo = totalSeconds >= 60
                     ? string.Format("{0}分{1:F1}秒", (int)(totalSeconds / 60), totalSeconds % 60)

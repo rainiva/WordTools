@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Microsoft.Office.Interop.Word;
 using Microsoft.Win32;
 
@@ -54,9 +55,9 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 属性不存在或读取错误
+                Debug.WriteLine($"[ConfigService] GetDocumentProperty error: {ex.Message}");
             }
             return defaultValue;
         }
@@ -93,9 +94,9 @@ namespace WordTools.Services
                     properties.Add(propertyName, false, MsoPropertyTypeString, value);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略保存错误
+                Debug.WriteLine($"[ConfigService] SetDocumentProperty error: {ex.Message}");
             }
         }
 
@@ -120,8 +121,9 @@ namespace WordTools.Services
                     return defaultValue;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Debug.WriteLine($"[ConfigService] GetRegistryValue error: {ex.Message}");
                 return defaultValue;
             }
         }
@@ -141,9 +143,9 @@ namespace WordTools.Services
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略保存错误
+                Debug.WriteLine($"[ConfigService] SetRegistryValue error: {ex.Message}");
             }
         }
 

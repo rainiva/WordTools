@@ -1,8 +1,14 @@
 param(
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [ValidateSet('None', 'Patch', 'Minor', 'Major')]
+    [string]$Bump = 'None'
 )
 
 $ErrorActionPreference = "Stop"
+
+$repoRoot = $PSScriptRoot
+$versionMeta = & (Join-Path $repoRoot "sync-version.ps1") -Bump $Bump
+$appVersion = [string]$versionMeta.Version
 
 function Find-IsccPath {
     $candidates = @(
@@ -29,6 +35,7 @@ function Build-Installer([string]$IsccPath, [string]$ArchitectureSwitch) {
     $arguments = @(
         "/D$ArchitectureSwitch",
         "/DSourceConfiguration=$Configuration",
+        "/DMyAppVersion=$appVersion",
         "Setup.iss"
     )
 
@@ -46,5 +53,5 @@ Build-Installer -IsccPath $isccPath -ArchitectureSwitch "ARCH_X64"
 
 Write-Host ""
 Write-Host "Installer build completed:" -ForegroundColor Green
-Write-Host "  Output\\WordToolbox_Setup_x86.exe"
-Write-Host "  Output\\WordToolbox_Setup_x64.exe"
+Write-Host "  dist\\WordToolbox_Setup_x86.exe"
+Write-Host "  dist\\WordToolbox_Setup_x64.exe"

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Word;
@@ -133,9 +134,9 @@ namespace WordTools.Services
                         return false;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 行高读取失败不阻断，继续其他检查
+                    System.Diagnostics.Debug.WriteLine("行高读取失败，继续其他检查: " + ex.Message);
                 }
 
                 // 4. 检查单元格宽度是否异常
@@ -148,9 +149,9 @@ namespace WordTools.Services
                         return false;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 宽度读取失败不阻断
+                    System.Diagnostics.Debug.WriteLine("宽度读取失败，继续其他检查: " + ex.Message);
                 }
 
                 return true;
@@ -201,7 +202,7 @@ namespace WordTools.Services
                     if (shape.Width <= 0 || shape.Height <= 0)
                     {
                         errorMessage = "图片尺寸异常（Width=" + shape.Width + ", Height=" + shape.Height + "）";
-                        try { shape.Delete(); } catch { }
+                        try { shape.Delete(); } catch (Exception deleteEx) { System.Diagnostics.Debug.WriteLine("删除异常尺寸图片失败: " + deleteEx.Message); }
                         return null;
                     }
 
@@ -262,8 +263,9 @@ namespace WordTools.Services
                     {
                         cellRange.InlineShapes[i].Delete();
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        System.Diagnostics.Debug.WriteLine("删除单元格内嵌图片失败: " + ex.Message);
                     }
                 }
 
@@ -281,17 +283,20 @@ namespace WordTools.Services
                                 shape.Delete();
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            System.Diagnostics.Debug.WriteLine("删除单元格浮动图片失败: " + ex.Message);
                         }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine("扫描单元格浮动图片失败: " + ex.Message);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine("清空单元格内容失败: " + ex.Message);
             }
 
             targetCell.Range.Text = "";
@@ -321,8 +326,9 @@ namespace WordTools.Services
                     {
                         cellRange.InlineShapes[i].Delete();
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        System.Diagnostics.Debug.WriteLine("删除单元格内嵌图片失败: " + ex.Message);
                     }
                 }
 
@@ -333,8 +339,9 @@ namespace WordTools.Services
                         () => FloatingShapeIndex.Create(CollectFloatingShapeAnchors(cellRange.Document.Shapes)));
                     shouldScanFloatingShapes = index.HasShapeInRange(cellRange.Start, cellRange.End);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine("浮动图片索引构建失败，回退到全量扫描: " + ex.Message);
                     shouldScanFloatingShapes = true;
                 }
 
@@ -354,13 +361,15 @@ namespace WordTools.Services
                                     shape.Delete();
                                 }
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                System.Diagnostics.Debug.WriteLine("删除单元格浮动图片失败: " + ex.Message);
                             }
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        System.Diagnostics.Debug.WriteLine("扫描单元格浮动图片失败: " + ex.Message);
                     }
                 }
 
@@ -393,8 +402,9 @@ namespace WordTools.Services
                         anchors.Add(new FloatingShapeAnchor(shape.Anchor.Start, shape.Anchor.End));
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Debug.WriteLine($"[ImageService] CollectFloatingShapeAnchors iteration error: {ex.Message}");
                 }
             }
 
@@ -526,17 +536,6 @@ namespace WordTools.Services
                 // 尺寸异常时使用安全值，避免缩放比例计算错误
                 if (cellWidth < 1) cellWidth = 1;
                 if (cellHeight < 1) cellHeight = 1;
-
-                // 最终合并单元格检测（防止绕开逻辑遗漏）
-                try
-                {
-                    if (targetCell.RowIndex != targetCell.RowIndex || targetCell.ColumnIndex != targetCell.ColumnIndex)
-                    {
-                        errorMessage = "目标单元格为合并单元格，已跳过";
-                        return false;
-                    }
-                }
-                catch { }
 
                 // 清空单元格现有内容，覆盖旧文本/旧图片
                 ClearCellContentForOverwrite(targetCell, context);
@@ -670,16 +669,16 @@ namespace WordTools.Services
                                 }
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // 忽略单个单元格错误
+                            Debug.WriteLine($"[ImageService] AdjustImageSizes single cell error: {ex.Message}");
                         }
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略批量操作错误
+                Debug.WriteLine($"[ImageService] AdjustImageSizes batch error: {ex.Message}");
             }
         }
 
@@ -703,9 +702,9 @@ namespace WordTools.Services
                         tbl.Rows.Add();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 忽略错误
+                    Debug.WriteLine($"[ImageService] BatchAddRows fallback error: {ex.Message}");
                 }
                 return;
             }
@@ -726,12 +725,13 @@ namespace WordTools.Services
                         tbl.Rows[tbl.Rows.Count].Select();
                         app.Selection.InsertRowsBelow(batch);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Debug.WriteLine($"[ImageService] InsertRowsBelow batch failed, falling back to row-by-row: {ex.Message}");
                         // 如果批量插入失败，回退到逐行添加
                         for (int i = 0; i < batch; i++)
                         {
-                            try { tbl.Rows.Add(); } catch { break; }
+                            try { tbl.Rows.Add(); } catch (Exception rowEx) { Debug.WriteLine("逐行添加表格行失败: " + rowEx.Message); break; }
                         }
                     }
 
@@ -742,9 +742,9 @@ namespace WordTools.Services
                     System.Windows.Forms.Application.DoEvents();
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[ImageService] BatchAddRows error: {ex.Message}");
             }
         }
 
@@ -785,9 +785,9 @@ namespace WordTools.Services
                 // 批量添加行
                 BatchAddRows(tbl, neededRows, app);
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略错误
+                Debug.WriteLine($"[ImageService] PreAllocateRows error: {ex.Message}");
             }
         }
 

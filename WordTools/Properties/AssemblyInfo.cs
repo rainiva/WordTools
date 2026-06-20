@@ -10,8 +10,8 @@ using System.Security;
 [assembly: AssemblyDescription("Word工具箱")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("WordTools")]
-[assembly: AssemblyProduct("WordTools")]
-[assembly: AssemblyCopyright("Copyright ©  2026")]
+[assembly: AssemblyProduct("Word工具箱")]
+[assembly: AssemblyCopyright("Copyright © 2026 WordTools")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -30,5 +30,6 @@ using System.Security;
 //      生成号
 //      修订号
 //
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyInformationalVersion("1.3.0")]

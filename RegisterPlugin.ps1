@@ -1,4 +1,4 @@
-﻿# WordTools COM 加载项注册脚本
+# WordTools COM 加载项注册脚本
 # 当前版本仅正式支持 64 位 Microsoft Word。
 
 [CmdletBinding()]
@@ -55,10 +55,10 @@ if ($Host -ne "Word") {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dllPath = Join-Path $scriptDir "WordTools\bin\$Configuration\WordTools.dll"
-$regAsmPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
-$ngenPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
+$regAsmPath = Join-Path $env:SystemRoot "Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
+$ngenPath = Join-Path $env:SystemRoot "Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
 $progId = "WordTools.ThisAddIn"
-$registryPath = "HKCU:\Software\Microsoft\Office\Word\Addins\$progId"
+$registryPath = "HKLM:\Software\Microsoft\Office\Word\Addins\$progId"
 
 if (-not (Test-Path $dllPath)) {
     Write-Host "[错误] 找不到 DLL 文件: $dllPath" -ForegroundColor Red

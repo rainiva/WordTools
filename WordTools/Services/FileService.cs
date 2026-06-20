@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Windows.Forms;
 
 namespace WordTools.Services
 {
@@ -14,70 +13,6 @@ namespace WordTools.Services
     {
         // 支持的图片文件扩展名
         private static readonly string[] SupportedExtensions = { ".jpg", ".jpeg", ".png" };
-
-        #region 文件夹选择
-
-        /// <summary>
-        /// 选择文件夹
-        /// </summary>
-        /// <param name="dialogTitle">对话框标题</param>
-        /// <param name="initialPath">初始路径（可选）</param>
-        /// <returns>选中的文件夹路径，如果取消则返回空字符串</returns>
-        public static string SelectFolder(string dialogTitle = "请选择文件夹...", string initialPath = "")
-        {
-            using (var dialog = new FolderBrowserDialog())
-            {
-                dialog.Description = dialogTitle;
-                dialog.ShowNewFolderButton = false;
-
-                // 设置初始路径
-                if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
-                {
-                    dialog.SelectedPath = initialPath;
-                }
-
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    return dialog.SelectedPath;
-                }
-            }
-            return string.Empty;
-        }
-
-        #endregion
-
-        #region 图片文件选择
-
-        /// <summary>
-        /// 选择图片文件（多选）
-        /// </summary>
-        /// <param name="dialogTitle">对话框标题</param>
-        /// <param name="initialPath">初始路径（可选）</param>
-        /// <returns>选中的文件路径数组，如果取消则返回 null</returns>
-        public static string[] SelectImageFiles(string dialogTitle = "请选择图片文件...", string initialPath = "")
-        {
-            using (var dialog = new OpenFileDialog())
-            {
-                dialog.Title = dialogTitle;
-                dialog.Multiselect = true;
-                dialog.Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*";
-                dialog.FilterIndex = 1;
-
-                // 设置初始目录
-                if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
-                {
-                    dialog.InitialDirectory = initialPath;
-                }
-
-                if (dialog.ShowDialog() == DialogResult.OK && dialog.FileNames.Length > 0)
-                {
-                    return dialog.FileNames;
-                }
-            }
-            return null;
-        }
-
-        #endregion
 
         #region 文件验证
 

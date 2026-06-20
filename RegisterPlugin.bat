@@ -41,8 +41,8 @@ if /I not "%HOST%"=="Word" (
     exit /b 1
 )
 
-set "REGASM_PATH=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
-set "NGEN_PATH=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
+set "REGASM_PATH=%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
+set "NGEN_PATH=%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\ngen.exe"
 set "DLL_PATH=%~dp0WordTools\bin\%CONFIGURATION%\WordTools.dll"
 
 if not exist "%REGASM_PATH%" (
@@ -74,10 +74,10 @@ if %errorLevel% neq 0 (
 
 echo.
 echo [2/3] 正在写入 Word Addins 注册项...
-reg add "HKCU\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v FriendlyName /t REG_SZ /d "Word工具箱" /f
-reg add "HKCU\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v Description /t REG_SZ /d "Word工具箱插件" /f
-reg add "HKCU\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v LoadBehavior /t REG_DWORD /d 3 /f
-reg add "HKCU\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v CommandLineSafe /t REG_DWORD /d 0 /f
+reg add "HKLM\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v FriendlyName /t REG_SZ /d "Word工具箱" /f
+reg add "HKLM\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v Description /t REG_SZ /d "Word工具箱插件" /f
+reg add "HKLM\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v LoadBehavior /t REG_DWORD /d 3 /f
+reg add "HKLM\Software\Microsoft\Office\Word\Addins\WordTools.ThisAddIn" /v CommandLineSafe /t REG_DWORD /d 0 /f
 
 if %errorLevel% neq 0 (
     echo.
