@@ -171,77 +171,10 @@ namespace WordTools
         /// </summary>
         public void OnRefreshNumberingClick(Office.IRibbonControl control)
         {
-            try
-            {
-                if (Application == null || Application.ActiveDocument == null)
-                {
-                    MessageBox.Show("请先打开一个 Word 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var doc = Application.ActiveDocument;
-                var selection = Application.Selection;
-
-                if (!Services.TableService.IsSelectionInTable(selection))
-                {
-                    MessageBox.Show("请先将光标放在需要刷新编号的表格中", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                var tbl = Services.TableService.GetCurrentTable(selection);
-                if (tbl == null)
-                {
-                    MessageBox.Show("无法获取当前表格", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                // 刷新表格编号（带进度提示，ScreenUpdating 由 TableService 内部控制）
-                Application.StatusBar = "正在刷新编号...";
-                System.Windows.Forms.Application.DoEvents();
-
-                Services.TableNumberingService.RefreshTableNumbering(tbl, doc, 2, (status) =>
-                {
-                    try
-                    {
-                        Application.StatusBar = status;
-                        System.Windows.Forms.Application.DoEvents();
-                    }
-                    catch (COMException)
-                    {
-                        // Word 可能处于繁忙或关闭状态，忽略状态栏更新失败
-                    }
-                });
-
-                // 确保域代码不可见
-                try
-                {
-                    if (doc.ActiveWindow.View.ShowFieldCodes)
-                        doc.ActiveWindow.View.ShowFieldCodes = false;
-                }
-                catch (COMException)
-                {
-                    // 视图对象可能暂时不可用，不影响编号结果
-                }
-
-                Application.StatusBar = "";
-                // 确保UI完全刷新后再显示提示框
-                // 使用后台线程延迟，避免阻塞UI线程
-                var t = new System.Threading.Thread(() =>
-                {
-                    System.Threading.Thread.Sleep(300);
-                });
-                t.Start();
-                while (t.IsAlive)
-                {
-                    System.Windows.Forms.Application.DoEvents();
-                    System.Threading.Thread.Sleep(10);
-                }
-                MessageBox.Show("表格编号已刷新完成！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(string.Format("刷新编号失败: {0}", ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
+            var notificationService = new Services.Adapters.MessageBoxNotificationService();
+            var numberingRefreshService = new Services.NumberingRefreshService(appContext, notificationService);
+            numberingRefreshService.RefreshFromCurrentSelection();
         }
 
         /// <summary>
