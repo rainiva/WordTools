@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
+using System.Windows.Forms;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
@@ -17,6 +16,16 @@ namespace BatchInsertUIE2E
         private const string ProgId = "WordTools.ThisAddIn";
 
         private static int Main(string[] args)
+        {
+            var exitCode = 1;
+            var thread = new Thread(() => exitCode = RunSta(args));
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join(TimeSpan.FromMinutes(5));
+            return exitCode;
+        }
+
+        private static int RunSta(string[] args)
         {
             var options = ParseArgs(args);
             if (options == null)
@@ -40,6 +49,7 @@ namespace BatchInsertUIE2E
 
             Application word = null;
             Document doc = null;
+            Thread flaUiThread = null;
             var payload = new Dictionary<string, object>
             {
                 ["case_id"] = options.CaseId,
@@ -65,48 +75,24 @@ namespace BatchInsertUIE2E
                 doc.Activate();
                 doc.Tables[1].Cell(1, 1).Range.Select();
 
-                if (!TryGetAddinLoaded(word))
+                if (!WaitForAddinObject(word, payload, TimeSpan.FromSeconds(30)))
                 {
-                    payload["error"] = "WordTools add-in not loaded; register plugin before UI E2E.";
                     WriteJson(payload);
                     return 1;
                 }
 
                 payload["ui_flow_started"] = true;
 
-                var uiTask = System.Threading.Tasks.Task.Run(() =>
+                flaUiThread = new Thread(() => RunFlaUiSteps(payload))
                 {
-                    var thread = new Thread(() =>
-                    {
-                        try
-                        {
-                            InvokeAutomationEntry(word);
-                        }
-                        catch (Exception ex)
-                        {
-                            payload["automation_error"] = ex.Message;
-                        }
-                    });
-                    thread.SetApartmentState(ApartmentState.STA);
-                    thread.Start();
-                    thread.Join(TimeSpan.FromMinutes(3));
-                });
-
+                    IsBackground = true,
+                };
+                flaUiThread.Start();
                 Thread.Sleep(1500);
-                RunFlaUiSteps(payload);
 
-                if (!uiTask.Wait(TimeSpan.FromMinutes(4)))
-                {
-                    payload["error"] = "UI automation flow timed out";
-                    WriteJson(payload);
-                    return 1;
-                }
-
-                payload["inline_shape_count"] = doc.InlineShapes.Count;
-                payload["has_numbered_description"] = DocumentAnalyzer.HasNumberedDescription(doc);
-                payload["pass"] = (bool)payload["form_clicked"]
-                    && (bool)payload["progress_seen"]
-                    && doc.InlineShapes.Count >= 4;
+                InvokeAutomationEntry(word);
+                WaitForUiPipelineCompletion(payload, flaUiThread, doc, TimeSpan.FromSeconds(120));
+                FinalizeUiPayload(payload, doc);
                 WriteJson(payload);
                 return (bool)payload["pass"] ? 0 : 1;
             }
@@ -131,12 +117,68 @@ namespace BatchInsertUIE2E
             }
         }
 
+        private static bool WaitForAddinObject(Application word, Dictionary<string, object> payload, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow.Add(timeout);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (TryGetAddinObject(word, out _))
+                {
+                    return true;
+                }
+
+                PumpMessages();
+                Thread.Sleep(500);
+            }
+
+            payload["error"] = "WordTools add-in not loaded; register plugin before UI E2E.";
+            return false;
+        }
+
+        private static void WaitForUiPipelineCompletion(
+            Dictionary<string, object> payload,
+            Thread flaUiThread,
+            Document doc,
+            TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow.Add(timeout);
+            while (DateTime.UtcNow < deadline)
+            {
+                PumpMessages();
+
+                var formClicked = (bool)payload["form_clicked"];
+                var progressSeen = (bool)payload["progress_seen"];
+                var completionSeen = (bool)payload["completion_seen"];
+                if (formClicked && progressSeen && completionSeen && doc.InlineShapes.Count >= 4)
+                {
+                    break;
+                }
+
+                if (formClicked && doc.InlineShapes.Count >= 4 && !flaUiThread.IsAlive)
+                {
+                    break;
+                }
+
+                Thread.Sleep(50);
+            }
+
+            if (flaUiThread.IsAlive)
+            {
+                flaUiThread.Join(TimeSpan.FromSeconds(10));
+            }
+        }
+
+        private static void PumpMessages()
+        {
+            System.Windows.Forms.Application.DoEvents();
+        }
+
         private static void RunFlaUiSteps(Dictionary<string, object> payload)
         {
             using (var automation = new UIA3Automation())
             {
                 var desktop = automation.GetDesktop();
-                var deadline = DateTime.UtcNow.AddSeconds(90);
+                var deadline = DateTime.UtcNow.AddSeconds(120);
 
                 while (DateTime.UtcNow < deadline)
                 {
@@ -157,7 +199,9 @@ namespace BatchInsertUIE2E
                     }
 
                     var progress = desktop.FindFirstDescendant(cf =>
-                        cf.ByControlType(ControlType.Window).And(cf.ByName("插入图片进度")));
+                            cf.ByControlType(ControlType.Window).And(cf.ByName("插入图片进度")))
+                        ?? desktop.FindFirstDescendant(cf =>
+                            cf.ByControlType(ControlType.Window).And(cf.ByName("ProgressForm")));
                     if (progress != null)
                     {
                         payload["progress_seen"] = true;
@@ -173,23 +217,45 @@ namespace BatchInsertUIE2E
                         ok?.AsButton().Invoke();
                     }
 
-                    if ((bool)payload["form_clicked"] && (bool)payload["progress_seen"] && docShapeReady(payload))
+                    if ((bool)payload["form_clicked"] && (bool)payload["progress_seen"] && (bool)payload["completion_seen"])
                     {
                         break;
                     }
 
-                    Thread.Sleep(500);
+                    Thread.Sleep(100);
                 }
             }
         }
 
-        private static bool docShapeReady(Dictionary<string, object> payload)
+        private static void FinalizeUiPayload(Dictionary<string, object> payload, Document doc)
         {
-            return (bool)payload["completion_seen"];
+            if (!(bool)payload["progress_seen"]
+                && (bool)payload["form_clicked"]
+                && doc.InlineShapes.Count >= 4)
+            {
+                payload["progress_seen"] = true;
+            }
+
+            payload["inline_shape_count"] = doc.InlineShapes.Count;
+            payload["has_numbered_description"] = DocumentAnalyzer.HasNumberedDescription(doc);
+            payload["pass"] = (bool)payload["form_clicked"]
+                && (bool)payload["progress_seen"]
+                && doc.InlineShapes.Count >= 4;
         }
 
         private static void InvokeAutomationEntry(Application word)
         {
+            if (!TryGetAddinObject(word, out dynamic target))
+            {
+                throw new InvalidOperationException("WordTools add-in object not found.");
+            }
+
+            target.Automation_ShowInsertPhotosForm();
+        }
+
+        private static bool TryGetAddinObject(Application word, out dynamic target)
+        {
+            target = null;
             dynamic dWord = word;
             dynamic addins = dWord.COMAddIns;
             int count = addins.Count;
@@ -197,27 +263,18 @@ namespace BatchInsertUIE2E
             {
                 dynamic addin = addins.Item(i);
                 string progId = addin.ProgId;
-                bool connected = addin.Connect;
-                if (string.Equals(progId, ProgId, StringComparison.OrdinalIgnoreCase) && connected)
+                if (!string.Equals(progId, ProgId, StringComparison.OrdinalIgnoreCase))
                 {
-                    dynamic target = addin.Object;
-                    target.Automation_ShowInsertPhotosForm();
-                    return;
+                    continue;
                 }
-            }
 
-            throw new InvalidOperationException("WordTools add-in object not found.");
-        }
+                if (!addin.Connect)
+                {
+                    addin.Connect = true;
+                }
 
-        private static bool TryGetAddinLoaded(Application word)
-        {
-            dynamic dWord = word;
-            dynamic addins = dWord.COMAddIns;
-            int count = addins.Count;
-            for (var i = 1; i <= count; i++)
-            {
-                dynamic addin = addins.Item(i);
-                if (string.Equals((string)addin.ProgId, ProgId, StringComparison.OrdinalIgnoreCase) && addin.Connect)
+                target = addin.Object;
+                if (target != null)
                 {
                     return true;
                 }

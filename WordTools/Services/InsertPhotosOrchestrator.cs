@@ -34,7 +34,14 @@ namespace WordTools.Services
 
                 if (pendingRequest != null)
                 {
-                    ExecuteDeferred(pendingRequest);
+                    if (InsertPhotosAutomationGate.IsEnabled)
+                    {
+                        Execute(pendingRequest);
+                    }
+                    else
+                    {
+                        ExecuteDeferred(pendingRequest);
+                    }
                 }
             }
             catch (Exception ex)

@@ -6,6 +6,7 @@ using Extensibility;
 using System.Runtime.InteropServices;
 using Office = Microsoft.Office.Core;
 using WordTools.Services;
+using WordTools.Interop;
 
 namespace WordTools
 {
@@ -13,7 +14,7 @@ namespace WordTools
     [Guid("A1B2C3D4-E5F6-7890-ABCD-EF1234567890")]
     [ProgId("WordTools.ThisAddIn")]
     [ClassInterface(ClassInterfaceType.AutoDispatch)]
-    public partial class ThisAddIn : IDTExtensibility2, Office.IRibbonExtensibility
+    public partial class ThisAddIn : IDTExtensibility2, Office.IRibbonExtensibility, IRequestComAddInAutomationService
     {
         private Office.IRibbonUI ribbonUI;
         private readonly RibbonController _ribbonController = new RibbonController();
@@ -60,6 +61,11 @@ namespace WordTools
         {
             this.Application = (Word.Application)Application;
 
+            if (AddInInst is Office.COMAddIn comAddIn)
+            {
+                comAddIn.Object = this;
+            }
+
             if (Globals.ThisAddIn == null)
             {
                 Globals.ThisAddIn = this;
@@ -102,6 +108,11 @@ namespace WordTools
         }
 
         #endregion
+
+        public object GetComAddInAutomationService()
+        {
+            return this;
+        }
 
         #region Ribbon 回调方法 - 直接在此类中实现
 
