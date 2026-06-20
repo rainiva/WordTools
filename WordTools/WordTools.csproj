@@ -116,6 +116,7 @@
     <Compile Include="Services\ImageInsertionBatchContext.cs" />
     <Compile Include="Services\ImageRowPlanner.cs" />
     <Compile Include="Services\InsertionPerformanceDiagnostics.cs" />
+    <Compile Include="Services\InsertionResultPresenter.cs" />
     <Compile Include="Services\InsertionSummaryFormatter.cs" />
     <Compile Include="Services\LoggingOptionsStateController.cs" />
     <Compile Include="Services\ProgressFormStateController.cs" />
