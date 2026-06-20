@@ -20,6 +20,10 @@ packages/
 ## 发布输出
 publish/
 
+## 安装包输出
+dist/
+Output/
+
 ## 测试项目输出
 TestResults/
 

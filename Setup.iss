@@ -3,7 +3,7 @@
 
 ; MyAppVersion is synced from version.json via sync-version.ps1.
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.0.0"
+  #define MyAppVersion "1.3.0"
 #endif
 #define MyAppName "Word工具箱"
 #define MyAppPublisher "WordTools"
@@ -48,7 +48,7 @@ ArchitecturesAllowed={#ArchitecturesAllowedValue}
 #if Defined(ARCH_X64)
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
-OutputDir=Output
+OutputDir=dist
 OutputBaseFilename={#OutputBaseName}
 Compression=lzma
 SolidCompression=yes

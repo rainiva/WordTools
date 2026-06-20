@@ -146,7 +146,7 @@ echo   - 插件文件: WordTools\bin\Release\
 echo   - 部署文件: WordTools\bin\Release\publish\
 echo.
 echo 安装方法:
-echo   方法1: 运行 Output\WordToolbox_Setup_x64.exe
+echo   方法1: 运行 dist\WordToolbox_Setup_x64.exe
 echo   方法2: 在 Word 中手动添加 COM 加载项
 echo.
 pause

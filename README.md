@@ -34,7 +34,7 @@ Word工具箱是一个 Word COM 加载项，安装后在 Word 功能区新增"Wo
 ### 方式一：安装包（推荐）
 
 1. 完全关闭 Microsoft Word（包括后台进程）
-2. 运行 `Output/WordToolbox_Setup_x64.exe`
+2. 运行 `dist/WordToolbox_Setup_x64.exe`
 3. 按安装向导完成安装
 4. 重新打开 Word，确认功能区出现"Word工具箱"选项卡
 
@@ -105,8 +105,22 @@ WordTools/
 │   │   └── BenchmarkLogService.cs     # 性能基准日志
 │   └── Properties/               # 程序集信息
 ├── WordTools.Tests/              # 单元测试项目
-└── Output/                       # 安装包输出目录
+└── dist/                         # 安装包输出目录（Inno Setup 构建产物）
 ```
+
+## 版本号
+
+单一来源：`version.json`（格式 **x.x.x**，如 `1.3.0`）。
+
+| 命令 | 说明 |
+|------|------|
+| `.\sync-version.ps1` | 将 `version.json` 同步到 `AssemblyInfo.cs`、`Setup.iss`、`WordTools.csproj` |
+| `.\sync-version.ps1 -Bump Patch` | 修订号 +1（缺陷修复）→ x.x.**n+1** |
+| `.\sync-version.ps1 -Bump Minor` | 次版本 +1（新功能/较大改动）→ x.**n+1**.0 |
+| `.\sync-version.ps1 -Bump Major` | 主版本 +1（不兼容变更）→ **n+1**.0.0 |
+| `.\build-installer.ps1 -Bump Patch` | 先 bump 再构建安装包到 `dist/` |
+
+程序集 `AssemblyVersion` / `AssemblyFileVersion` 自动写为四段 `x.x.x.0`；UI 与安装包显示三段 semver。
 
 ## 开发环境要求
 
@@ -125,7 +139,8 @@ WordTools/
 | `build.bat` | 自动查找 MSBuild，构建 Release 配置，生成强名称密钥，执行 NGen 预编译 |
 | `RegisterPlugin.ps1` | PowerShell 注册脚本，自动检测架构，仅支持 64 位 Word |
 | `RegisterPlugin.bat` | `RegisterPlugin.ps1` 的批处理入口 |
-| `build-installer.ps1` | 调用 Inno Setup 编译器构建安装包（x64 为正式包，x86 仅用于不支持提示） |
+| `build-installer.ps1` | 调用 Inno Setup 编译器构建安装包到 `dist/`（x64 为正式包，x86 仅用于不支持提示） |
+| `sync-version.ps1` | 从 `version.json` 同步版本号，可选 `-Bump Patch|Minor|Major` |
 
 ## 已知限制
 
