@@ -53,5 +53,5 @@ Build-Installer -IsccPath $isccPath -ArchitectureSwitch "ARCH_X64"
 
 Write-Host ""
 Write-Host "Installer build completed:" -ForegroundColor Green
-Write-Host "  dist\\WordToolbox_Setup_x86.exe"
-Write-Host "  dist\\WordToolbox_Setup_x64.exe"
+Write-Host "  dist\\WordToolbox_Setup_${appVersion}_x86.exe"
+Write-Host "  dist\\WordToolbox_Setup_${appVersion}_x64.exe"

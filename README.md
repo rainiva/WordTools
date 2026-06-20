@@ -34,7 +34,7 @@ Word工具箱是一个 Word COM 加载项，安装后在 Word 功能区新增"Wo
 ### 方式一：安装包（推荐）
 
 1. 完全关闭 Microsoft Word（包括后台进程）
-2. 运行 `dist/WordToolbox_Setup_x64.exe`
+2. 运行 `dist/WordToolbox_Setup_<version>_x64.exe`（例如 `WordToolbox_Setup_1.3.0_x64.exe`）
 3. 按安装向导完成安装
 4. 重新打开 Word，确认功能区出现"Word工具箱"选项卡
 

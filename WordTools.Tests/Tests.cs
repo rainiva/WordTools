@@ -410,8 +410,9 @@ namespace WordTools.Tests
 
             Assert.Contains("ARCH_X86", source);
             Assert.Contains("ARCH_X64", source);
-            Assert.Contains("WordToolbox_Setup_x86", source);
-            Assert.Contains("WordToolbox_Setup_x64", source);
+            Assert.Contains("WordToolbox_Setup_", source);
+            Assert.Contains("\"WordToolbox_Setup_\" + MyAppVersion + \"_x86\"", source);
+            Assert.Contains("\"WordToolbox_Setup_\" + MyAppVersion + \"_x64\"", source);
             Assert.Contains("仅支持 64 位 Microsoft Word", source);
             Assert.Contains("暂不支持 32 位 Word、32 位 WPS、64 位 WPS", source);
         }

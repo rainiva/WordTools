@@ -24,12 +24,12 @@
 
 #if Defined(ARCH_X86)
   #define BuildLabel "32 位环境（当前版本暂不支持）"
-  #define OutputBaseName "WordToolbox_Setup_x86"
+  #define OutputBaseName "WordToolbox_Setup_" + MyAppVersion + "_x86"
   #define DefaultDirNameValue "{autopf32}\WordToolbox"
   #define ArchitecturesAllowedValue "x86compatible"
 #else
   #define BuildLabel "64 位 Microsoft Word"
-  #define OutputBaseName "WordToolbox_Setup_x64"
+  #define OutputBaseName "WordToolbox_Setup_" + MyAppVersion + "_x64"
   #define DefaultDirNameValue "{autopf64}\WordToolbox"
   #define ArchitecturesAllowedValue "x64compatible"
   #define RegAsmDirectory "{win}\Microsoft.NET\Framework64\v4.0.30319"
