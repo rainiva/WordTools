@@ -23,6 +23,8 @@ namespace WordTools.Tests
 
             var method = addInType.GetMethod("GetComAddInAutomationService");
             Assert.NotNull(method);
+            Assert.NotNull(addInType.GetMethod("Automation_ShowInsertPhotosForm"));
+            Assert.NotNull(addInType.GetMethod("Automation_ExecuteFromConfig"));
 
             var instance = Activator.CreateInstance(addInType);
             var automationObject = method.Invoke(instance, null);
