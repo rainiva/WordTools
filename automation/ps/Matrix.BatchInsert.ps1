@@ -4,6 +4,7 @@
 param(
     [string]$RepoRoot,
     [string]$CaseId = "AC-B03",
+    [string]$CaseIds = "",
     [ValidateSet("true", "false")]
     [string]$Visible = "false",
     [string]$Configuration = "Release"
@@ -70,7 +71,15 @@ if ($existingWord) {
 }
 
 try {
-    $output = & $e2eExe -CaseId $CaseId -RepoRoot $repoRootPath -Visible $Visible 2>&1
+    $exeArgs = @("-RepoRoot", $repoRootPath, "-Visible", $Visible)
+    if (-not [string]::IsNullOrWhiteSpace($CaseIds)) {
+        $exeArgs += @("-CaseIds", $CaseIds)
+    }
+    else {
+        $exeArgs += @("-CaseId", $CaseId)
+    }
+
+    $output = & $e2eExe @exeArgs 2>&1
     $text = ($output | Out-String).Trim()
     if ([string]::IsNullOrWhiteSpace($text)) {
         Write-MatrixJsonResult -Payload @{

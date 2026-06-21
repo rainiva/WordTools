@@ -17,16 +17,13 @@ namespace BatchInsertE2E
             if (options == null)
             {
                 Console.Error.WriteLine("Usage: BatchInsertE2E -CaseId AC-B03 -RepoRoot <path> [-Visible true]");
+                Console.Error.WriteLine("   or: BatchInsertE2E -CaseIds AC-B01;AC-B02 -RepoRoot <path> [-Visible false]");
                 return 2;
             }
 
+            var caseIds = options.ResolveCaseIds();
+            var caseResults = new List<Dictionary<string, object>>();
             Application word = null;
-            Document doc = null;
-            var payload = new Dictionary<string, object>
-            {
-                ["case_id"] = options.CaseId,
-                ["pass"] = false,
-            };
 
             try
             {
@@ -34,54 +31,125 @@ namespace BatchInsertE2E
                 var templatePath = Path.Combine(assetsRoot, "table-template.docx");
                 if (!File.Exists(templatePath))
                 {
-                    payload["error"] = "missing table-template.docx; run automation/scripts/generate-fixtures.ps1";
-                    WriteJson(payload);
+                    WriteFailure(caseIds, caseResults, "missing table-template.docx; run automation/scripts/generate-fixtures.ps1");
                     return 1;
                 }
 
                 var wordToolsPath = Path.Combine(options.RepoRoot, "WordTools", "bin", "Release", "WordTools.dll");
                 if (!File.Exists(wordToolsPath))
                 {
-                    payload["error"] = "missing WordTools.dll; build WordTools Release first";
-                    WriteJson(payload);
+                    WriteFailure(caseIds, caseResults, "missing WordTools.dll; build WordTools Release first");
                     return 1;
                 }
 
                 var wordToolsAssembly = Assembly.LoadFrom(wordToolsPath);
                 word = new Application { Visible = options.Visible };
-                doc = word.Documents.Open(templatePath);
-                doc.Activate();
-                PrepareSelection(doc, options.CaseId);
 
-                var services = BuildServices(wordToolsAssembly, options.CaseId);
-                var request = BuildRequest(wordToolsAssembly, options.CaseId, assetsRoot);
-                ExecuteOrchestrator(wordToolsAssembly, word, request, services);
+                var allPass = true;
+                foreach (var caseId in caseIds)
+                {
+                    Document doc = null;
+                    var payload = new Dictionary<string, object>
+                    {
+                        ["case_id"] = caseId,
+                        ["pass"] = false,
+                    };
 
-                var outputDoc = SaveOutputDocument(doc, options.CaseId);
-                FillResultPayload(payload, doc, services, options.CaseId, outputDoc);
-                payload["pass"] = true;
-                WriteJson(payload);
-                return 0;
+                    try
+                    {
+                        doc = word.Documents.Open(templatePath);
+                        doc.Activate();
+                        PrepareSelection(doc, caseId);
+
+                        var services = BuildServices(wordToolsAssembly, caseId);
+                        var request = BuildRequest(wordToolsAssembly, caseId, assetsRoot);
+                        ExecuteOrchestrator(wordToolsAssembly, word, request, services);
+
+                        MaybeSaveOutputDocument(doc, caseId, payload);
+                        FillResultPayload(payload, doc, services, caseId, payload.TryGetValue("saved_docx_path", out var saved) ? saved as string : null);
+                        payload["pass"] = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        payload["error"] = ex.Message;
+                        allPass = false;
+                    }
+                    finally
+                    {
+                        if (doc != null)
+                        {
+                            doc.Close(false);
+                        }
+                    }
+
+                    if (!(bool)payload["pass"])
+                    {
+                        allPass = false;
+                    }
+
+                    caseResults.Add(payload);
+                }
+
+                WriteSessionJson(caseIds, caseResults, allPass);
+                return allPass ? 0 : 1;
             }
             catch (Exception ex)
             {
-                payload["error"] = ex.Message;
-                WriteJson(payload);
+                WriteFailure(caseIds, caseResults, ex.Message);
                 return 1;
             }
             finally
             {
-                if (doc != null)
-                {
-                    doc.Close(false);
-                }
-
                 if (word != null)
                 {
                     word.Quit(false);
                     System.Runtime.InteropServices.Marshal.ReleaseComObject(word);
                 }
             }
+        }
+
+        private static void WriteFailure(string[] caseIds, List<Dictionary<string, object>> caseResults, string error)
+        {
+            if (caseResults.Count == 0)
+            {
+                caseResults.Add(new Dictionary<string, object>
+                {
+                    ["case_id"] = caseIds.Length > 0 ? caseIds[0] : "",
+                    ["pass"] = false,
+                    ["error"] = error,
+                });
+            }
+
+            WriteSessionJson(caseIds, caseResults, false);
+        }
+
+        private static void WriteSessionJson(string[] caseIds, List<Dictionary<string, object>> caseResults, bool allPass)
+        {
+            if (caseIds.Length == 1 && caseResults.Count == 1)
+            {
+                WriteJson(caseResults[0]);
+                return;
+            }
+
+            WriteJson(new Dictionary<string, object>
+            {
+                ["batch"] = true,
+                ["pass"] = allPass,
+                ["cases"] = caseResults,
+            });
+        }
+
+        private static void MaybeSaveOutputDocument(Document doc, string caseId, Dictionary<string, object> payload)
+        {
+            if (!string.Equals(
+                Environment.GetEnvironmentVariable("WORDTOOLS_E2E_SAVE_DOCX"),
+                "1",
+                StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            payload["saved_docx_path"] = SaveOutputDocument(doc, caseId);
         }
 
         private static Options ParseArgs(string[] args)
@@ -96,12 +164,14 @@ namespace BatchInsertE2E
                 }
             }
 
-            if (!map.TryGetValue("CaseId", out var caseId) || string.IsNullOrWhiteSpace(caseId))
+            if (!map.TryGetValue("RepoRoot", out var repoRoot) || string.IsNullOrWhiteSpace(repoRoot))
             {
                 return null;
             }
 
-            if (!map.TryGetValue("RepoRoot", out var repoRoot) || string.IsNullOrWhiteSpace(repoRoot))
+            map.TryGetValue("CaseId", out var caseId);
+            map.TryGetValue("CaseIds", out var caseIds);
+            if (string.IsNullOrWhiteSpace(caseId) && string.IsNullOrWhiteSpace(caseIds))
             {
                 return null;
             }
@@ -115,6 +185,7 @@ namespace BatchInsertE2E
             return new Options
             {
                 CaseId = caseId,
+                CaseIds = caseIds,
                 RepoRoot = Path.GetFullPath(repoRoot),
                 Visible = visible,
             };
@@ -169,50 +240,88 @@ namespace BatchInsertE2E
             switch (caseId)
             {
                 case "AC-B04":
-                    SetRequest(request, requestType, folderMode, assetsRoot, caseId);
+                case "AC-B07":
+                case "AC-B08":
+                case "AC-B11":
+                    ConfigureFolderRequest(request, requestType, folderMode, assetsRoot, caseId);
                     break;
                 case "AC-B05":
-                    SetRequest(request, requestType, selectedMode, assetsRoot, caseId);
+                    ConfigureSelectedRequest(request, requestType, selectedMode, assetsRoot, caseId);
                     break;
                 default:
-                    SetRequest(request, requestType, selectedMode, assetsRoot, "AC-B03");
+                    ConfigureSelectedRequest(request, requestType, selectedMode, assetsRoot, caseId == "AC-B06" ? "AC-B03" : caseId);
                     break;
             }
 
             return request;
         }
 
-        private static void SetRequest(object request, Type requestType, object mode, string assetsRoot, string caseId)
+        private static void ConfigureSelectedRequest(object request, Type requestType, object selectedMode, string assetsRoot, string profileCaseId)
         {
             void Set(string name, object value)
             {
                 requestType.GetProperty(name)?.SetValue(request, value, null);
             }
 
-            Set("Mode", mode);
-            Set("MinHeight", 30f);
-            Set("NeedDescription", true);
-            Set("UseFileNameAsDescription", true);
-            Set("UseFolderNameAsDescription", false);
-            Set("NeedAutoNumbering", caseId != "AC-B05");
-            Set("NumberAlignment", 0);
-            Set("NumberPosition", 0);
+            Set("Mode", selectedMode);
+            Set("IncludeRootImages", true);
+            Set("IncludeSubFolderImages", true);
 
-            if (caseId == "AC-B04")
+            switch (profileCaseId)
             {
-                Set("FolderPath", Path.Combine(assetsRoot, "images", "folder-root"));
-                Set("IncludeRootImages", true);
-                Set("IncludeSubFolderImages", true);
-                return;
-            }
+                case "AC-B05":
+                    Set("MinHeight", 30f);
+                    Set("NeedDescription", true);
+                    Set("UseFileNameAsDescription", true);
+                    Set("UseFolderNameAsDescription", false);
+                    Set("NeedAutoNumbering", false);
+                    Set("NumberAlignment", 2);
+                    Set("NumberPosition", 1);
+                    Set("SelectedFiles", new[]
+                    {
+                        Path.Combine(assetsRoot, "images", "single", "01.jpg"),
+                    });
+                    return;
 
-            if (caseId == "AC-B05")
-            {
-                Set("SelectedFiles", new[]
-                {
-                    Path.Combine(assetsRoot, "images", "single", "01.jpg"),
-                });
-                return;
+                case "AC-B09":
+                    Set("MinHeight", 30f);
+                    Set("NeedDescription", false);
+                    Set("UseFileNameAsDescription", false);
+                    Set("UseFolderNameAsDescription", false);
+                    Set("NeedAutoNumbering", false);
+                    Set("NumberAlignment", 2);
+                    Set("NumberPosition", 1);
+                    break;
+
+                case "AC-B10":
+                    Set("MinHeight", 30f);
+                    Set("NeedDescription", false);
+                    Set("UseFileNameAsDescription", true);
+                    Set("UseFolderNameAsDescription", false);
+                    Set("NeedAutoNumbering", true);
+                    Set("NumberAlignment", 2);
+                    Set("NumberPosition", 2);
+                    break;
+
+                case "AC-B12":
+                    Set("MinHeight", 30f);
+                    Set("NeedDescription", true);
+                    Set("UseFileNameAsDescription", false);
+                    Set("UseFolderNameAsDescription", false);
+                    Set("NeedAutoNumbering", true);
+                    Set("NumberAlignment", 1);
+                    Set("NumberPosition", 1);
+                    break;
+
+                default:
+                    Set("MinHeight", 30f);
+                    Set("NeedDescription", false);
+                    Set("UseFileNameAsDescription", true);
+                    Set("UseFolderNameAsDescription", false);
+                    Set("NeedAutoNumbering", true);
+                    Set("NumberAlignment", 2);
+                    Set("NumberPosition", 1);
+                    break;
             }
 
             var folder = Path.Combine(assetsRoot, "images", "selected-4");
@@ -223,6 +332,53 @@ namespace BatchInsertE2E
                 Path.Combine(folder, "03.jpg"),
                 Path.Combine(folder, "04.jpg"),
             });
+        }
+
+        private static void ConfigureFolderRequest(object request, Type requestType, object folderMode, string assetsRoot, string caseId)
+        {
+            void Set(string name, object value)
+            {
+                requestType.GetProperty(name)?.SetValue(request, value, null);
+            }
+
+            Set("Mode", folderMode);
+            Set("FolderPath", Path.Combine(assetsRoot, "images", "folder-root"));
+            Set("MinHeight", 30f);
+            Set("NeedDescription", false);
+            Set("NeedAutoNumbering", true);
+            Set("NumberAlignment", 2);
+            Set("NumberPosition", 1);
+
+            switch (caseId)
+            {
+                case "AC-B07":
+                    Set("IncludeRootImages", true);
+                    Set("IncludeSubFolderImages", false);
+                    Set("UseFileNameAsDescription", true);
+                    Set("UseFolderNameAsDescription", false);
+                    return;
+
+                case "AC-B08":
+                    Set("IncludeRootImages", false);
+                    Set("IncludeSubFolderImages", true);
+                    Set("UseFileNameAsDescription", true);
+                    Set("UseFolderNameAsDescription", false);
+                    return;
+
+                case "AC-B11":
+                    Set("IncludeRootImages", true);
+                    Set("IncludeSubFolderImages", true);
+                    Set("UseFileNameAsDescription", false);
+                    Set("UseFolderNameAsDescription", true);
+                    return;
+
+                default:
+                    Set("IncludeRootImages", true);
+                    Set("IncludeSubFolderImages", true);
+                    Set("UseFileNameAsDescription", true);
+                    Set("UseFolderNameAsDescription", false);
+                    return;
+            }
         }
 
         private static void ExecuteOrchestrator(Assembly wordToolsAssembly, Application word, object request, object services)
@@ -275,6 +431,10 @@ namespace BatchInsertE2E
             payload["has_subfolder_title"] = DocumentAnalyzer.HasSubfolderTitle(doc, "sub-a");
             payload["last_image_row_col2_text"] = DocumentAnalyzer.GetLastImageRowCol2Text(doc);
             payload["description_samples"] = DocumentAnalyzer.CollectDescriptionSamples(doc);
+            payload["has_number_after_description"] = DocumentAnalyzer.HasNumberAfterDescription(doc);
+            payload["has_center_aligned_numbered_description"] = DocumentAnalyzer.HasCenterAlignedNumberedDescription(doc);
+            payload["has_folder_name_description"] = DocumentAnalyzer.HasFolderNameDescription(doc);
+            payload["has_manual_description_rows"] = DocumentAnalyzer.HasManualDescriptionRows(doc);
         }
 
         private static int GetIntProperty(object target, string propertyName)
@@ -335,8 +495,19 @@ namespace BatchInsertE2E
         private sealed class Options
         {
             public string CaseId { get; set; }
+            public string CaseIds { get; set; }
             public string RepoRoot { get; set; }
             public bool Visible { get; set; }
+
+            public string[] ResolveCaseIds()
+            {
+                if (!string.IsNullOrWhiteSpace(CaseIds))
+                {
+                    return CaseIds.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                }
+
+                return new[] { CaseId };
+            }
         }
     }
 }

@@ -114,6 +114,7 @@
     <Compile Include="Services\Adapters\NullFailureDetailsPresenter.cs" />
     <Compile Include="Services\InsertPhotosExecutionServices.cs" />
     <Compile Include="Services\InsertPhotosAutomationGate.cs" />
+    <Compile Include="Services\InsertPhotosAutomationRequestBuilder.cs" />
     <Compile Include="Services\InsertPhotosAutomationFormPreset.cs" />
     <Compile Include="Services\Adapters\WordDocumentContext.cs" />
     <Compile Include="Services\Adapters\WordApplicationContext.cs" />
@@ -141,6 +142,7 @@
     <Compile Include="Services\EDF_DataFillerService.cs" />
     <Compile Include="Services\EDF_TemplateDetector.cs" />
     <Compile Include="Forms\InsertPhotosForm.cs" />
+    <Compile Include="Forms\InsertPhotosRequest.cs" />
     <Compile Include="Forms\ExcelDataFillerForm.cs" />
     <Compile Include="Forms\ProgressForm.cs" />
     <Compile Include="Forms\FailureDetailsForm.cs" />

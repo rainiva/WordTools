@@ -4,7 +4,10 @@
 param(
     [string]$RepoRoot,
     [string]$CaseId = "AC-UI-B03",
+    [string]$CaseIds = "",
     [string]$ImageRoot = "",
+    [ValidateSet("true", "false")]
+    [string]$Direct = "true",
     [string]$Configuration = "Release"
 )
 
@@ -67,8 +70,20 @@ if ($existingWord) {
     exit 1
 }
 
+$exeArgs = @(
+    "-RepoRoot", $repoRootPath,
+    "-ImageRoot", $ImageRoot,
+    "-Direct", $Direct
+)
+if (-not [string]::IsNullOrWhiteSpace($CaseIds)) {
+    $exeArgs += @("-CaseIds", $CaseIds)
+}
+else {
+    $exeArgs += @("-CaseId", $CaseId)
+}
+
 try {
-    $output = & $uiExe -CaseId $CaseId -RepoRoot $repoRootPath -ImageRoot $ImageRoot 2>&1
+    $output = & $uiExe @exeArgs 2>&1
     $text = ($output | Out-String).Trim()
     if ([string]::IsNullOrWhiteSpace($text)) {
         Write-MatrixJsonResult -Payload @{

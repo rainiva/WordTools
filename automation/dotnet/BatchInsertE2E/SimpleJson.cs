@@ -41,6 +41,25 @@ namespace BatchInsertE2E
                 return;
             }
 
+            if (value is IList list)
+            {
+                builder.Append('[');
+                var first = true;
+                foreach (var item in list)
+                {
+                    if (!first)
+                    {
+                        builder.Append(',');
+                    }
+
+                    first = false;
+                    WriteValue(builder, item);
+                }
+
+                builder.Append(']');
+                return;
+            }
+
             if (value is IDictionary dictionary)
             {
                 builder.Append('{');

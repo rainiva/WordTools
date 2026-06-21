@@ -26,7 +26,13 @@
       { "case_id": "AC-B03", "case_name": "selected-four-numbered" },
       { "case_id": "AC-B04", "case_name": "folder-root-and-sub" },
       { "case_id": "AC-B05", "case_name": "single-image-na" },
-      { "case_id": "AC-B06", "case_name": "cancel-mid-batch" }
+      { "case_id": "AC-B06", "case_name": "cancel-mid-batch" },
+      { "case_id": "AC-B07", "case_name": "folder-root-only" },
+      { "case_id": "AC-B08", "case_name": "folder-sub-only" },
+      { "case_id": "AC-B09", "case_name": "selected-no-description" },
+      { "case_id": "AC-B10", "case_name": "number-after-center" },
+      { "case_id": "AC-B11", "case_name": "folder-name-description" },
+      { "case_id": "AC-B12", "case_name": "manual-description-numbered" }
     ]
   },
   "test_assets": {

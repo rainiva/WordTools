@@ -23,7 +23,7 @@ namespace BatchInsertE2E
                     try
                     {
                         var text = NormalizeCellText(table.Cell(row, col).Range.Text);
-                        if (System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d+\.\s*\S"))
+                        if (System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d+\."))
                         {
                             numberedCount++;
                         }
@@ -109,6 +109,145 @@ namespace BatchInsertE2E
             }
 
             return samples.ToArray();
+        }
+
+        public static bool HasNumberAfterDescription(Document doc)
+        {
+            return FindNumberedDescriptionCell(doc, text =>
+                System.Text.RegularExpressions.Regex.IsMatch(text, @"-\d+$"));
+        }
+
+        public static bool HasCenterAlignedNumberedDescription(Document doc)
+        {
+            if (doc.Tables.Count == 0)
+            {
+                return false;
+            }
+
+            var table = doc.Tables[1];
+            for (var row = 1; row <= table.Rows.Count; row++)
+            {
+                for (var col = 1; col <= 2; col++)
+                {
+                    try
+                    {
+                        var cell = table.Cell(row, col);
+                        var text = NormalizeCellText(cell.Range.Text);
+                        if (!System.Text.RegularExpressions.Regex.IsMatch(text, @"\d"))
+                        {
+                            continue;
+                        }
+
+                        var alignment = cell.Range.ParagraphFormat.Alignment;
+                        if (alignment == WdParagraphAlignment.wdAlignParagraphCenter)
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public static bool HasFolderNameDescription(Document doc)
+        {
+            if (doc.Tables.Count == 0)
+            {
+                return false;
+            }
+
+            var table = doc.Tables[1];
+            for (var row = 1; row <= table.Rows.Count; row++)
+            {
+                for (var col = 1; col <= 2; col++)
+                {
+                    try
+                    {
+                        var text = NormalizeCellText(table.Cell(row, col).Range.Text);
+                        if (string.IsNullOrWhiteSpace(text))
+                        {
+                            continue;
+                        }
+
+                        if (text.IndexOf("sub-a", StringComparison.OrdinalIgnoreCase) >= 0
+                            && text.IndexOf(".jpg", StringComparison.OrdinalIgnoreCase) < 0)
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public static bool HasManualDescriptionRows(Document doc)
+        {
+            if (doc.Tables.Count == 0)
+            {
+                return false;
+            }
+
+            var table = doc.Tables[1];
+            var manualRows = 0;
+            for (var row = 1; row <= table.Rows.Count; row++)
+            {
+                try
+                {
+                    var imageCell = table.Cell(row, 1).Range;
+                    if (imageCell.InlineShapes.Count > 0)
+                    {
+                        continue;
+                    }
+
+                    var text = NormalizeCellText(table.Cell(row, 1).Range.Text);
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        manualRows++;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return manualRows >= 2;
+        }
+
+        private static bool FindNumberedDescriptionCell(Document doc, Func<string, bool> predicate)
+        {
+            if (doc.Tables.Count == 0)
+            {
+                return false;
+            }
+
+            var table = doc.Tables[1];
+            for (var row = 1; row <= table.Rows.Count; row++)
+            {
+                for (var col = 1; col <= 2; col++)
+                {
+                    try
+                    {
+                        var text = NormalizeCellText(table.Cell(row, col).Range.Text);
+                        if (predicate(text))
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static string NormalizeCellText(string text)

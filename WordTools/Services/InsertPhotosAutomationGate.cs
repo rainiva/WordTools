@@ -12,6 +12,7 @@ namespace WordTools.Services
         public const string EnableEnvVar = "WORDTOOLS_UI_AUTOMATION";
         public const string SelectedFilesEnvVar = "WORDTOOLS_UI_AUTOMATION_SELECTED_FILES";
         public const string FolderPathEnvVar = "WORDTOOLS_UI_AUTOMATION_FOLDER_PATH";
+        public const string ConfigFileEnvVar = "WORDTOOLS_UI_AUTOMATION_CONFIG_FILE";
 
         public static bool IsEnabled =>
             string.Equals(
@@ -30,7 +31,12 @@ namespace WordTools.Services
 
         public static string[] GetPresetSelectedFiles()
         {
-            var raw = Environment.GetEnvironmentVariable(SelectedFilesEnvVar);
+            var raw = ReadConfigField("selected_files");
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                raw = Environment.GetEnvironmentVariable(SelectedFilesEnvVar);
+            }
+
             if (string.IsNullOrWhiteSpace(raw))
             {
                 return Array.Empty<string>();
@@ -51,6 +57,12 @@ namespace WordTools.Services
 
         public static string GetPresetFolderPath()
         {
+            var fromFile = ReadConfigField("folder_path");
+            if (!string.IsNullOrWhiteSpace(fromFile))
+            {
+                return fromFile;
+            }
+
             return Environment.GetEnvironmentVariable(FolderPathEnvVar)?.Trim();
         }
 
@@ -58,6 +70,52 @@ namespace WordTools.Services
         {
             folderPath = GetPresetFolderPath();
             return !string.IsNullOrWhiteSpace(folderPath) && Directory.Exists(folderPath);
+        }
+
+        internal static string ReadConfigField(string fieldName)
+        {
+            var configPath = Environment.GetEnvironmentVariable(ConfigFileEnvVar);
+            if (string.IsNullOrWhiteSpace(configPath) || !File.Exists(configPath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var json = File.ReadAllText(configPath);
+                var marker = "\"" + fieldName + "\"";
+                var index = json.IndexOf(marker, StringComparison.Ordinal);
+                if (index < 0)
+                {
+                    return null;
+                }
+
+                var colon = json.IndexOf(':', index);
+                if (colon < 0)
+                {
+                    return null;
+                }
+
+                var startQuote = json.IndexOf('"', colon + 1);
+                if (startQuote < 0)
+                {
+                    return null;
+                }
+
+                var endQuote = json.IndexOf('"', startQuote + 1);
+                if (endQuote < 0)
+                {
+                    return null;
+                }
+
+                return json.Substring(startQuote + 1, endQuote - startQuote - 1)
+                    .Replace("\\\\", "\\")
+                    .Replace("\\\"", "\"");
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

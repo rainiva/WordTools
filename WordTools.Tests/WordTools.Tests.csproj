@@ -46,5 +46,7 @@
     <Compile Include="..\WordTools\Services\InsertPhotosExecutionServices.cs" Link="Services\InsertPhotosExecutionServices.cs" />
     <Compile Include="..\WordTools\Services\InsertPhotosAutomationGate.cs" Link="Services\InsertPhotosAutomationGate.cs" />
     <Compile Include="..\WordTools\Services\InsertPhotosAutomationFormPreset.cs" Link="Services\InsertPhotosAutomationFormPreset.cs" />
+    <Compile Include="..\WordTools\Services\InsertPhotosAutomationRequestBuilder.cs" Link="Services\InsertPhotosAutomationRequestBuilder.cs" />
+    <Compile Include="..\WordTools\Forms\InsertPhotosRequest.cs" Link="Forms\InsertPhotosRequest.cs" />
   </ItemGroup>
 </Project>

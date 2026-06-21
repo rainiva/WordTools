@@ -16,28 +16,6 @@ using Theme = WordTools.Theme;
 
 namespace WordTools.Forms
 {
-    public enum InsertPhotosRequestMode
-    {
-        Folder,
-        SelectedFiles
-    }
-
-    public sealed class InsertPhotosRequest
-    {
-        public InsertPhotosRequestMode Mode { get; set; }
-        public string FolderPath { get; set; }
-        public string[] SelectedFiles { get; set; }
-        public float MinHeight { get; set; }
-        public bool NeedDescription { get; set; }
-        public bool UseFileNameAsDescription { get; set; }
-        public bool UseFolderNameAsDescription { get; set; }
-        public bool IncludeRootImages { get; set; }
-        public bool IncludeSubFolderImages { get; set; }
-        public bool NeedAutoNumbering { get; set; }
-        public int NumberAlignment { get; set; }
-        public int NumberPosition { get; set; }
-    }
-
     /// <summary>
     /// 批量插图工具主窗体
     /// </summary>
@@ -523,14 +501,42 @@ namespace WordTools.Forms
             optNoDescription.Checked = false;
             optNeedDescription.Checked = false;
             optUseFolderName.Checked = false;
-            optUseFilename.Checked = preset.UseFileNameAsDescription;
+            optUseFilename.Checked = false;
 
-            // 真实 UI 流程默认不强制最小高度；留空表示按单元格自适应
-            txtImageHeight.Text = string.Empty;
+            if (preset.UseFileNameAsDescription)
+            {
+                optUseFilename.Checked = true;
+            }
+            else if (preset.UseFolderNameAsDescription)
+            {
+                optUseFolderName.Checked = true;
+            }
+            else if (preset.NeedDescription)
+            {
+                optNeedDescription.Checked = true;
+            }
+            else
+            {
+                optNoDescription.Checked = true;
+            }
+
+            // 高度：默认留空自适应；特定用例可注入固定 cm
+            if (preset.MinHeightCm.HasValue && preset.MinHeightCm.Value > 0)
+            {
+                txtImageHeight.Text = preset.MinHeightCm.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                txtImageHeight.Text = string.Empty;
+            }
 
             chkIncludeRoot.Checked = preset.IncludeRootImages;
             chkIncludeSubFolder.Checked = preset.IncludeSubFolderImages;
             chkAutoNumbering.Checked = preset.NeedAutoNumbering;
+            optAlignLeft.Checked = preset.NumberAlignment == 1;
+            optAlignCenter.Checked = preset.NumberAlignment != 1;
+            optNumberBeforeDesc.Checked = preset.NumberPosition != 2;
+            optNumberAfterDesc.Checked = preset.NumberPosition == 2;
         }
 
         private void UpdateAutoNumberingState()

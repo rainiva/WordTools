@@ -209,6 +209,74 @@ def evaluate_batch_insert_case(case_id: str, result: dict[str, Any]) -> dict[str
             base["details"].append("expected cancelled with cancel notification")
         return base
 
+    if case_id == "AC-B07":
+        ok = (
+            inline_shape_count == 3
+            and success_count == 3
+            and not bool(result.get("has_subfolder_title"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected 3 root-only folder images without subfolder title")
+        return base
+
+    if case_id == "AC-B08":
+        ok = (
+            inline_shape_count == 2
+            and success_count == 2
+            and bool(result.get("has_subfolder_title"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected 2 subfolder-only images with subfolder title")
+        return base
+
+    if case_id == "AC-B09":
+        ok = (
+            inline_shape_count == 4
+            and success_count == 4
+            and not bool(result.get("has_numbered_description"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected 4 shapes without numbered descriptions")
+        return base
+
+    if case_id == "AC-B10":
+        ok = (
+            inline_shape_count == 4
+            and success_count == 4
+            and bool(result.get("has_number_after_description"))
+            and bool(result.get("has_center_aligned_numbered_description"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected numbered descriptions after text with center alignment")
+        return base
+
+    if case_id == "AC-B11":
+        ok = (
+            inline_shape_count == 5
+            and success_count == 5
+            and bool(result.get("has_folder_name_description"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected folder-name descriptions in subfolder rows")
+        return base
+
+    if case_id == "AC-B12":
+        ok = (
+            inline_shape_count == 4
+            and success_count == 4
+            and bool(result.get("has_numbered_description"))
+            and bool(result.get("has_manual_description_rows"))
+        )
+        base["pass"] = ok
+        if not ok:
+            base["details"].append("expected manual description rows with numbering")
+        return base
+
     base["details"].append(f"unknown case_id: {case_id}")
     return base
 
@@ -229,25 +297,103 @@ def evaluate_batch_insert_ui_case(case_id: str, result: dict[str, Any]) -> dict[
     ui_flow_ok = (
         bool(result.get("ui_flow_started"))
         and bool(result.get("form_clicked"))
-        and bool(result.get("progress_seen"))
     )
 
-    if case_id in {"AC-UI-B03", "AC-UI-B04", "AC-UI-B05"}:
-        if expected_count <= 0:
-            base["details"].append("expected_image_count missing or invalid")
-            return base
-
-        ok = ui_flow_ok and inline_shape_count == expected_count
-        if case_id == "AC-UI-B03":
-            ok = ok and bool(result.get("has_numbered_description"))
-            min_rows = int(result.get("min_table_row_count", 8))
-            ok = ok and int(result.get("table_row_count", 0)) >= min_rows
+    if case_id == "AC-UI-B07" and bool(result.get("expect_zero_images")):
+        ok = ui_flow_ok and inline_shape_count == 0
         base["pass"] = ok
         if not ok:
-            base["details"].append(
-                f"expected UI flow + inline_shape_count={expected_count}, got {inline_shape_count}"
-            )
+            base["details"].append("expected zero images for root-only scope on ImageRoot")
         return base
 
-    base["details"].append(f"unknown ui case_id: {case_id}")
+    ui_flow_ok = ui_flow_ok and bool(result.get("progress_seen"))
+
+    handlers = {
+        "AC-UI-B03": _eval_ui_b03,
+        "AC-UI-B04": _eval_ui_count_only,
+        "AC-UI-B05": _eval_ui_b05,
+        "AC-UI-B07": _eval_ui_b07,
+        "AC-UI-B08": _eval_ui_b08,
+        "AC-UI-B09": _eval_ui_b09,
+        "AC-UI-B10": _eval_ui_b10,
+        "AC-UI-B11": _eval_ui_b11,
+        "AC-UI-B12": _eval_ui_b12,
+        "AC-UI-B14": _eval_ui_b14,
+        "AC-UI-B15": _eval_ui_count_only,
+    }
+
+    handler = handlers.get(case_id)
+    if handler is None:
+        base["details"].append(f"unknown ui case_id: {case_id}")
+        return base
+
+    if expected_count <= 0 and case_id != "AC-UI-B07":
+        base["details"].append("expected_image_count missing or invalid")
+        return base
+
+    ok = handler(result, ui_flow_ok, inline_shape_count, expected_count)
+    base["pass"] = ok
+    if not ok:
+        base["details"].append(
+            f"expected UI flow + inline_shape_count={expected_count}, got {inline_shape_count}"
+        )
     return base
+
+
+def _eval_ui_b03(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    ok = ok and bool(result.get("has_numbered_description"))
+    min_rows = int(result.get("min_table_row_count", 8))
+    return ok and int(result.get("table_row_count", 0)) >= min_rows
+
+
+def _eval_ui_count_only(
+    result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int
+) -> bool:
+    return ui_flow_ok and inline_shape_count == expected_count
+
+
+def _eval_ui_b05(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and not bool(result.get("has_numbered_description"))
+
+
+def _eval_ui_b07(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and not bool(result.get("has_subfolder_title"))
+
+
+def _eval_ui_b08(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and bool(result.get("has_subfolder_title"))
+
+
+def _eval_ui_b09(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and not bool(result.get("has_numbered_description"))
+
+
+def _eval_ui_b10(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and bool(result.get("has_number_after_description")) and bool(
+        result.get("has_center_aligned_numbered_description")
+    )
+
+
+def _eval_ui_b11(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and bool(result.get("has_folder_name_description"))
+
+
+def _eval_ui_b12(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and bool(result.get("has_numbered_description")) and bool(
+        result.get("has_manual_description_rows")
+    )
+
+
+def _eval_ui_b14(result: dict[str, Any], ui_flow_ok: bool, inline_shape_count: int, expected_count: int) -> bool:
+    ok = ui_flow_ok and inline_shape_count == expected_count
+    return ok and bool(result.get("has_numbered_description")) and bool(
+        result.get("has_left_aligned_numbered_description")
+    )

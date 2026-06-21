@@ -19,6 +19,26 @@ namespace WordTools.Services
             _application = application ?? throw new ArgumentNullException(nameof(application));
         }
 
+        public void ExecuteFromAutomationConfig()
+        {
+            InsertPhotosAutomationGate.EnsureEnabled();
+            if (!InsertPhotosAutomationGate.TryBuildRequest(out var request))
+            {
+                throw new InvalidOperationException(
+                    "Unable to build insert request from automation config.");
+            }
+
+            var totalFiles = request.Mode == InsertPhotosRequestMode.Folder
+                ? FileService.CountTotalImageFiles(
+                    request.FolderPath,
+                    request.IncludeRootImages,
+                    request.IncludeSubFolderImages)
+                : (request.SelectedFiles?.Length ?? 0);
+
+            var services = InsertPhotosExecutionServices.CreateHeadless(totalFiles);
+            Execute(request, services);
+        }
+
         public void ShowFormAndExecuteIfConfirmed()
         {
             try

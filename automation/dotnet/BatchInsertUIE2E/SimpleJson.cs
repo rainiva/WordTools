@@ -41,6 +41,42 @@ namespace BatchInsertUIE2E
                 return;
             }
 
+            if (value is IList list)
+            {
+                builder.Append('[');
+                var first = true;
+                foreach (var item in list)
+                {
+                    if (!first)
+                    {
+                        builder.Append(',');
+                    }
+
+                    first = false;
+                    WriteValue(builder, item);
+                }
+
+                builder.Append(']');
+                return;
+            }
+
+            if (value is string[] stringArray)
+            {
+                builder.Append('[');
+                for (var i = 0; i < stringArray.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        builder.Append(',');
+                    }
+
+                    WriteString(builder, stringArray[i]);
+                }
+
+                builder.Append(']');
+                return;
+            }
+
             if (value is IDictionary dictionary)
             {
                 builder.Append('{');
