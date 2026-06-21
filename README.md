@@ -1,13 +1,12 @@
 # Word工具箱
 
-Word工具箱是一个 Word COM 加载项，安装后在 Word 功能区新增"Word工具箱"选项卡，提供批量插图、Excel 数据填充、表格编号刷新等办公辅助功能。
+Word工具箱是一个 Word COM 加载项，安装后在 Word 功能区新增"Word工具箱"选项卡，提供批量插图、表格编号刷新等办公辅助功能。
 
 ## 功能特性
 
 | 功能组 | 功能 | 说明 |
 |--------|------|------|
 | **图片工具** | 批量插图 | 从文件夹或选择的图片文件批量插入到 Word 表格，支持自动编号、描述行、子文件夹递归 |
-| **工具** | Excel 数据填充 | 根据 Excel 数据按锚定字段匹配，批量填充 Word 表格 |
 | **工具** | 刷新编号 | 一键刷新当前表格中的 SEQ 域编号 |
 | **帮助** | 关于 | 显示版本信息 |
 
@@ -33,8 +32,10 @@ Word工具箱是一个 Word COM 加载项，安装后在 Word 功能区新增"Wo
 
 ### 方式一：安装包（推荐）
 
+从 [GitHub Releases](https://github.com/rainiva/WordTools/releases/latest) 下载 `WordToolbox_Setup_<version>_x64.exe`（当前 **v1.3.2**），或本地构建产物位于 `dist/` 目录。
+
 1. 完全关闭 Microsoft Word（包括后台进程）
-2. 运行 `dist/WordToolbox_Setup_<version>_x64.exe`（例如 `WordToolbox_Setup_1.3.0_x64.exe`）
+2. 运行 `WordToolbox_Setup_1.3.2_x64.exe`
 3. 按安装向导完成安装
 4. 重新打开 Word，确认功能区出现"Word工具箱"选项卡
 
@@ -92,7 +93,6 @@ WordTools/
 │   ├── Theme.cs                  # UI 主题与 DPI 缩放
 │   ├── Forms/                    # 窗体
 │   │   ├── InsertPhotosForm.cs   # 批量插图窗体
-│   │   ├── ExcelDataFillerForm.cs # Excel 数据填充窗体
 │   │   ├── ProgressForm.cs       # 进度显示窗体
 │   │   └── FailureDetailsForm.cs # 失败详情窗体
 │   ├── Services/                 # 业务服务层
@@ -101,7 +101,6 @@ WordTools/
 │   │   ├── FileService.cs        # 文件系统操作
 │   │   ├── ConfigService.cs      # 配置持久化
 │   │   ├── ProgressService.cs    # 带进度条的批量插入
-│   │   ├── EDF_DataFillerService.cs   # Excel 数据填充逻辑
 │   │   └── BenchmarkLogService.cs     # 性能基准日志
 │   └── Properties/               # 程序集信息
 ├── WordTools.Tests/              # 单元测试项目
@@ -110,7 +109,7 @@ WordTools/
 
 ## 版本号
 
-单一来源：`version.json`（格式 **x.x.x**，如 `1.3.0`）。
+单一来源：`version.json`（格式 **x.x.x**，当前 **1.3.2**）。
 
 | 命令 | 说明 |
 |------|------|
@@ -121,6 +120,17 @@ WordTools/
 | `.\build-installer.ps1 -Bump Patch` | 先 bump 再构建安装包到 `dist/` |
 
 程序集 `AssemblyVersion` / `AssemblyFileVersion` 自动写为四段 `x.x.x.0`；Ribbon「关于」对话框与安装包显示 `AssemblyInformationalVersion`（三段 semver）。
+
+## 更新日志
+
+### v1.3.2
+
+- 移除 Excel 数据填充工具（功能区入口、窗体、服务与相关配置）
+- 功能区保留：批量插图、刷新编号、日志设置、关于
+
+### v1.3.1
+
+- 分层 E2E 自动化（smoke / standard / full）与 COM 直连冒烟路径
 
 ## 开发环境要求
 

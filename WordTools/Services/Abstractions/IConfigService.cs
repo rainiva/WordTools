@@ -24,16 +24,6 @@ namespace WordTools.Services.Abstractions
         void SaveNumberAlignment(int value, Document doc = null);
         int GetNumberPosition(Document doc = null);
         void SaveNumberPosition(int value, Document doc = null);
-        string GetEdfExcelPath();
-        void SaveEdfExcelPath(string value);
-        string GetEdfAnchorField();
-        void SaveEdfAnchorField(string value);
-        string GetEdfTargetColumn();
-        void SaveEdfTargetColumn(string value);
-        string GetEdfSampleSizeColumn();
-        void SaveEdfSampleSizeColumn(string value);
-        bool GetEdfReplaceSampleSize();
-        void SaveEdfReplaceSampleSize(bool value);
         bool GetDetailedLoggingEnabled();
         void SaveDetailedLoggingEnabled(bool value);
         bool GetBenchmarkLoggingEnabled();

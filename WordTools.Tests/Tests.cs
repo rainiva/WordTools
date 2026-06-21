@@ -348,20 +348,6 @@ namespace WordTools.Tests
         }
 
         [Fact]
-        public void TestExcelDataFillerOrchestratorOwnsFormLaunch()
-        {
-            string orchestratorPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Services", "ExcelDataFillerOrchestrator.cs");
-            string orchestratorSource = File.ReadAllText(Path.GetFullPath(orchestratorPath));
-            string addInPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "ThisAddIn.cs");
-            string addInSource = File.ReadAllText(Path.GetFullPath(addInPath));
-
-            Assert.Contains("ExcelDataFillerForm", orchestratorSource);
-            Assert.Contains("ShowDialog();", orchestratorSource);
-            Assert.Contains("ExcelDataFillerOrchestrator", addInSource);
-            Assert.DoesNotContain("ExcelDataFillerForm", addInSource);
-        }
-
-        [Fact]
         public void TestAboutVersionSyncedFromVersionJson()
         {
             string versionJson = ReadProjectSource("version.json");
@@ -630,14 +616,6 @@ namespace WordTools.Tests
             Assert.DoesNotContain("MessageBox.Show", source);
             Assert.DoesNotContain("new ProgressForm", source);
             Assert.DoesNotContain("new FailureDetailsForm", source);
-        }
-
-        [Fact]
-        public void EdfDataFillerServiceSourceDoesNotReferenceGlobalsOrMessageBox()
-        {
-            string source = ReadProjectSource(Path.Combine("WordTools", "Services", "EDF_DataFillerService.cs"));
-            Assert.DoesNotContain("Globals.ThisAddIn", source);
-            Assert.DoesNotContain("MessageBox.Show", source);
         }
 
         [Fact]

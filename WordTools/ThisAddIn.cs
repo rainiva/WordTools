@@ -200,14 +200,6 @@ namespace WordTools
             numberingRefreshService.RefreshFromCurrentSelection();
         }
 
-        /// <summary>
-        /// Excel数据填充按钮点击
-        /// </summary>
-        public void OnExcelDataFillerClick(Office.IRibbonControl control)
-        {
-            new ExcelDataFillerOrchestrator(Globals.Application).ShowForm();
-        }
-
         #endregion
 
         #endregion

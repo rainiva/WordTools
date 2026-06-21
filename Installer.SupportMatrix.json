@@ -23,7 +23,7 @@
       "status": "experimental",
       "validationStage": "experimental ui passed",
       "activationRoute": "WpsAddinsWl",
-      "note": "AddinsWl write contract confirmed on 2026-05-26 via Invoke-WpsAddinsWlExperiment exp1: empty-string value payload is sufficient for WPS x86 to surface the WordTools ribbon tab. COM registration (WordTools.ThisAddIn) must pre-exist. P0 functional validation (batch insert, Excel fill, refresh numbering) not yet performed. Keep WPS x86 at experimental until Phase 3 P0 evidence is collected."
+      "note": "AddinsWl write contract confirmed on 2026-05-26 via Invoke-WpsAddinsWlExperiment exp1: empty-string value payload is sufficient for WPS x86 to surface the WordTools ribbon tab. COM registration (WordTools.ThisAddIn) must pre-exist. P0 functional validation (batch insert, refresh numbering) not yet performed. Keep WPS x86 at experimental until Phase 3 P0 evidence is collected."
     },
     {
       "host": "WPS",

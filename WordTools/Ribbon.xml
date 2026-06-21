@@ -21,16 +21,6 @@
                   onAction="OnRefreshNumberingClick"/>
         </group>
 
-        <group id="grpTools" label="工具">
-          <button id="btnExcelDataFiller"
-                  label="Excel数据填充"
-                  screentip="Excel 数据批量填充到 Word 表格"
-                  supertip="从 Excel 文件读取数据，智能识别 Word 表格结构并自动填充到表格中。"
-                  size="large"
-                  imageMso="TableExcelSpreadsheetInsert"
-                  onAction="OnExcelDataFillerClick"/>
-        </group>
-
         <group id="grpDebug" label="调试与日志">
           <menu id="menuLoggingSettings"
                 label="日志设置"

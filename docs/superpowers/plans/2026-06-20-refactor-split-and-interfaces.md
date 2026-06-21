@@ -1338,7 +1338,6 @@ ThisAddIn 应只包含：
 - `GetCustomUI()` — Ribbon XML 加载
 - `OnInsertPhotosClick()` — 委托给 `ShowInsertPhotosForm()`
 - `OnRefreshNumberingClick()` — 委托给 `TableNumberingService`
-- `OnExcelDataFillerClick()` — 创建 ExcelDataFillerForm
 - `ShowInsertPhotosForm()` — 窗体创建
 - `ExecuteInsertPhotosRequest()` — 服务组装
 - `ExecuteInsertPhotosRequestDeferred()` — 延迟调度
@@ -1460,7 +1459,6 @@ Theme.cs 只保留：`Colors` 类、`Fonts` 类、`DpiScale` 方法、`S()` 缩�
 
 涉及文件：
 - `WordTools/Forms/InsertPhotosForm.cs`
-- `WordTools/Forms/ExcelDataFillerForm.cs`
 - `WordTools/Forms/ProgressForm.cs`
 - `WordTools/Forms/FailureDetailsForm.cs`
 
@@ -1753,7 +1751,6 @@ git commit -m "refactor: complete split refactoring - all phases verified"
 | 批量插图（文件夹模式） | 手动在 Word 中测试，功能不变 |
 | 批量插图（选中文件模式） | 手动在 Word 中测试，功能不变 |
 | 刷新表格编号 | 手动在 Word 中测试，功能不变 |
-| Excel 数据填充 | 手动在 Word 中测试，功能不变 |
 | Ribbon 日志设置 | 手动在 Word 中测试，功能不变 |
 | 关于对话框 | 手动在 Word 中测试，功能不变 |
 

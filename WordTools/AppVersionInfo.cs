@@ -39,7 +39,7 @@ namespace WordTools
                     : copyright.Replace("Copyright ", string.Empty).Trim();
 
                 return string.Format(
-                    "Word工具箱 v{0}\n\n功能：批量插图、Excel数据填充、自动编号\n\n{1}",
+                    "Word工具箱 v{0}\n\n功能：批量插图、自动编号\n\n{1}",
                     DisplayVersion,
                     copyrightLine);
             }
