@@ -224,16 +224,29 @@ def evaluate_batch_insert_ui_case(case_id: str, result: dict[str, Any]) -> dict[
         base["details"].append("host reported pass=false")
         return base
 
-    if case_id == "AC-UI-B03":
-        ok = (
-            bool(result.get("ui_flow_started"))
-            and bool(result.get("form_clicked"))
-            and bool(result.get("progress_seen"))
-            and int(result.get("inline_shape_count", 0)) >= 4
-        )
+    expected_count = int(result.get("expected_image_count", 0))
+    inline_shape_count = int(result.get("inline_shape_count", 0))
+    ui_flow_ok = (
+        bool(result.get("ui_flow_started"))
+        and bool(result.get("form_clicked"))
+        and bool(result.get("progress_seen"))
+    )
+
+    if case_id in {"AC-UI-B03", "AC-UI-B04", "AC-UI-B05"}:
+        if expected_count <= 0:
+            base["details"].append("expected_image_count missing or invalid")
+            return base
+
+        ok = ui_flow_ok and inline_shape_count == expected_count
+        if case_id == "AC-UI-B03":
+            ok = ok and bool(result.get("has_numbered_description"))
+            min_rows = int(result.get("min_table_row_count", 8))
+            ok = ok and int(result.get("table_row_count", 0)) >= min_rows
         base["pass"] = ok
         if not ok:
-            base["details"].append("expected UI flow + >=4 inline shapes")
+            base["details"].append(
+                f"expected UI flow + inline_shape_count={expected_count}, got {inline_shape_count}"
+            )
         return base
 
     base["details"].append(f"unknown ui case_id: {case_id}")

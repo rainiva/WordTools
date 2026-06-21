@@ -36,6 +36,16 @@ namespace BatchInsertUIE2E
             return numberedCount >= 2;
         }
 
+        public static int GetTableRowCount(Document doc)
+        {
+            if (doc == null || doc.Tables.Count == 0)
+            {
+                return 0;
+            }
+
+            return doc.Tables[1].Rows.Count;
+        }
+
         private static string NormalizeCellText(string text)
         {
             if (string.IsNullOrEmpty(text))

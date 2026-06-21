@@ -4,6 +4,7 @@
 param(
     [string]$RepoRoot,
     [string]$CaseId = "AC-UI-B03",
+    [string]$ImageRoot = "",
     [string]$Configuration = "Release"
 )
 
@@ -41,6 +42,21 @@ if (-not (Test-Path -LiteralPath $uiExe)) {
     & dotnet build $uiProject -c $Configuration | Out-Null
 }
 
+if ([string]::IsNullOrWhiteSpace($ImageRoot)) {
+    $ImageRoot = [string]$env:WORDTOOLS_UI_IMAGE_ROOT
+}
+if ([string]::IsNullOrWhiteSpace($ImageRoot)) {
+    $ImageRoot = "C:\Users\coxte\Desktop\test2"
+}
+if (-not (Test-Path -LiteralPath $ImageRoot)) {
+    Write-MatrixJsonResult -Payload @{
+        case_id = $CaseId
+        pass = $false
+        error = "ImageRoot not found: $ImageRoot"
+    }
+    exit 1
+}
+
 $existingWord = Get-Process -Name WINWORD -ErrorAction SilentlyContinue
 if ($existingWord) {
     Write-MatrixJsonResult -Payload @{
@@ -52,7 +68,7 @@ if ($existingWord) {
 }
 
 try {
-    $output = & $uiExe -CaseId $CaseId -RepoRoot $repoRootPath 2>&1
+    $output = & $uiExe -CaseId $CaseId -RepoRoot $repoRootPath -ImageRoot $ImageRoot 2>&1
     $text = ($output | Out-String).Trim()
     if ([string]::IsNullOrWhiteSpace($text)) {
         Write-MatrixJsonResult -Payload @{

@@ -494,6 +494,15 @@ namespace WordTools.Services
                     ((dynamic)p).LockAspectRatio = -1;
                 }
 
+                if (p.Width > targetWidth)
+                {
+                    float widthScale = targetWidth / p.Width;
+                    ((dynamic)p).LockAspectRatio = 0;
+                    p.Width = targetWidth;
+                    p.Height = p.Height * widthScale;
+                    ((dynamic)p).LockAspectRatio = -1;
+                }
+
                 return p;
             }
             catch (Exception ex)
@@ -591,6 +600,16 @@ namespace WordTools.Services
                         ((dynamic)p).LockAspectRatio = 0;
                         p.Height = minHeightPoints;
                         p.Width = p.Width * ratio;
+                        ((dynamic)p).LockAspectRatio = -1;
+                    }
+
+                    // 最小高度放大后若宽于单元格，回缩至列宽内，避免窄列裁切
+                    if (p.Width > cellWidth)
+                    {
+                        float widthScale = cellWidth / p.Width;
+                        ((dynamic)p).LockAspectRatio = 0;
+                        p.Width = cellWidth;
+                        p.Height = p.Height * widthScale;
                         ((dynamic)p).LockAspectRatio = -1;
                     }
                 }

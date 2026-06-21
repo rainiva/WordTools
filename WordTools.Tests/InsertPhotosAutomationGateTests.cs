@@ -1,6 +1,7 @@
 using System;
 using WordTools.Services;
 using Xunit;
+using System.IO;
 
 namespace WordTools.Tests
 {
@@ -51,6 +52,38 @@ namespace WordTools.Tests
         {
             Environment.SetEnvironmentVariable(InsertPhotosAutomationGate.EnableEnvVar, null);
             Assert.Throws<InvalidOperationException>(() => InsertPhotosAutomationGate.EnsureEnabled());
+        }
+
+        [Fact]
+        public void ResolveFormPreset_b03_uses_filename_and_numbering()
+        {
+            var preset = InsertPhotosAutomationGate.ResolveFormPreset("AC-UI-B03");
+            Assert.True(preset.UseFileNameAsDescription);
+            Assert.True(preset.NeedAutoNumbering);
+        }
+
+        [Fact]
+        public void ResolveFormPreset_b05_disables_numbering()
+        {
+            var preset = InsertPhotosAutomationGate.ResolveFormPreset("AC-UI-B05");
+            Assert.True(preset.UseFileNameAsDescription);
+            Assert.False(preset.NeedAutoNumbering);
+        }
+
+        [Fact]
+        public void TryGetPresetFolderPath_returns_true_when_folder_exists()
+        {
+            var folder = Path.GetTempPath();
+            Environment.SetEnvironmentVariable(InsertPhotosAutomationGate.FolderPathEnvVar, folder);
+            try
+            {
+                Assert.True(InsertPhotosAutomationGate.TryGetPresetFolderPath(out var resolved));
+                Assert.Equal(folder, resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(InsertPhotosAutomationGate.FolderPathEnvVar, null);
+            }
         }
     }
 }

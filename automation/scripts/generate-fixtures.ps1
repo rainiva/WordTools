@@ -48,7 +48,10 @@ function New-SmallJpeg {
 function New-TableTemplateDocx {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Path
+        [string]$Path,
+
+        [int]$Rows = 12,
+        [int]$Columns = 2
     )
 
     $dir = Split-Path -Parent $Path
@@ -62,17 +65,27 @@ function New-TableTemplateDocx {
         $word = New-Object -ComObject Word.Application
         $word.Visible = $false
         $doc = $word.Documents.Add()
+
         $range = $doc.Range()
-        $range.Text = "Batch insert E2E template`r"
-        $table = $doc.Tables.Add($range, 3, 2)
-        $table.Cell(1, 1).Range.Text = "`r"
-        $table.Cell(1, 2).Range.Text = "`r"
-        $table.Cell(2, 1).Range.Text = "`r"
-        $table.Cell(2, 2).Range.Text = "`r"
-        $table.Cell(3, 1).Range.Text = "`r"
-        $table.Cell(3, 2).Range.Text = "`r"
+        $range.Collapse(0) # wdCollapseStart
+        # 与 Word「插入 → 表格」对话框默认一致：
+        # DefaultTableBehavior=1 (wdWord9TableBehavior), AutoFitBehavior=0 (wdAutoFitFixed)
+        # 实测：列宽约均分正文区（~415pt），自动套用「网格型/Table Grid」实线边框
+        $table = $doc.Tables.Add($range, $Rows, $Columns, 1, 0)
+
         $table.Cell(1, 1).Select() | Out-Null
-        $doc.SaveAs([ref]$Path)
+
+        $tempPath = [string](Join-Path $env:TEMP ("wordtools-table-template-" + [Guid]::NewGuid().ToString("N") + ".docx"))
+        $saveTarget = $tempPath
+        $doc.SaveAs([ref]$saveTarget)
+        Copy-Item -LiteralPath $tempPath -Destination $Path -Force
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+
+        return [ordered]@{
+            row_count = $Rows
+            column_count = $Columns
+            style = "word_insert_table_autofit_fixed"
+        }
     }
     finally {
         if ($null -ne $doc) {
@@ -87,8 +100,13 @@ function New-TableTemplateDocx {
 
 New-Item -ItemType Directory -Path $assetsRoot -Force | Out-Null
 
-New-TableTemplateDocx -Path (Join-Path $assetsRoot "table-template.docx")
-New-TableTemplateDocx -Path (Join-Path $assetsRoot "blank.docx")
+$templateMeta = New-TableTemplateDocx -Path (Join-Path $assetsRoot "table-template.docx") -Rows 12 -Columns 2
+$null = New-TableTemplateDocx -Path (Join-Path $assetsRoot "blank.docx") -Rows 12 -Columns 2
+$templateMeta | ConvertTo-Json | ForEach-Object {
+    $manifestPath = Join-Path $assetsRoot "table-template.manifest.json"
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($manifestPath, $_, $utf8NoBom)
+}
 New-SmallJpeg -Path (Join-Path $assetsRoot "test-small.jpg") -ColorArgb 0xFFCC6633
 
 $selectedDir = Join-Path $assetsRoot "images\selected-4"

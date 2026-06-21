@@ -388,6 +388,8 @@ namespace WordTools.Forms
         private void CreateActionButtonsRow(ref int topPos)
         {
             btnInsertFromFolder = UiToolkit.CreateButton("插入文件夹", UiToolkit.ButtonStyle.Success);
+            btnInsertFromFolder.Name = "btnInsertFromFolder";
+            btnInsertFromFolder.AccessibleName = "btnInsertFromFolder";
             btnInsertFromFolder.Location = new DrawingPoint(S(15), topPos);
             btnInsertFromFolder.Size = new Size(S(100), CTRL_HEIGHT);
             btnInsertFromFolder.Click += BtnInsertFromFolder_Click;
@@ -452,6 +454,17 @@ namespace WordTools.Forms
                 optNumberAfterDesc.Checked = ConfigService.GetNumberPosition() == 2;
                 optNumberBeforeDesc.Checked = !optNumberAfterDesc.Checked;
 
+                if (InsertPhotosAutomationGate.IsEnabled)
+                {
+                    ApplyAutomationFormPreset(InsertPhotosAutomationGate.ResolveFormPresetFromEnvironment());
+                }
+
+                if (InsertPhotosAutomationGate.IsEnabled
+                    && InsertPhotosAutomationGate.TryGetPresetFolderPath(out var presetFolder))
+                {
+                    txtFolderPath.Text = presetFolder;
+                }
+
                 UpdateAutoNumberingState();
             }
             catch (Exception ex)
@@ -498,6 +511,26 @@ namespace WordTools.Forms
         private void AutoNumbering_CheckedChanged(object sender, EventArgs e)
         {
             UpdateAutoNumberingState();
+        }
+
+        private void ApplyAutomationFormPreset(InsertPhotosAutomationFormPreset preset)
+        {
+            if (preset == null)
+            {
+                return;
+            }
+
+            optNoDescription.Checked = false;
+            optNeedDescription.Checked = false;
+            optUseFolderName.Checked = false;
+            optUseFilename.Checked = preset.UseFileNameAsDescription;
+
+            // 真实 UI 流程默认不强制最小高度；留空表示按单元格自适应
+            txtImageHeight.Text = string.Empty;
+
+            chkIncludeRoot.Checked = preset.IncludeRootImages;
+            chkIncludeSubFolder.Checked = preset.IncludeSubFolderImages;
+            chkAutoNumbering.Checked = preset.NeedAutoNumbering;
         }
 
         private void UpdateAutoNumberingState()

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 def _assets_root() -> Path:
     return Path(__file__).resolve().parents[1] / "assets"
@@ -9,6 +11,18 @@ def test_table_template_docx_exists():
     path = _assets_root() / "table-template.docx"
     assert path.is_file(), f"missing fixture: {path}"
     assert path.stat().st_size > 1000
+
+
+def test_table_template_has_enough_rows():
+    manifest = _assets_root() / "table-template.manifest.json"
+    if not manifest.is_file():
+        pytest.skip("run automation/scripts/generate-fixtures.ps1 to refresh table-template")
+
+    import json
+
+    meta = json.loads(manifest.read_text(encoding="utf-8-sig"))
+    assert int(meta.get("row_count", 0)) >= 8
+    assert int(meta.get("column_count", 0)) == 2
 
 
 def test_test_small_jpg_exists():
