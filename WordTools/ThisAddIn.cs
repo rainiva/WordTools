@@ -149,7 +149,7 @@ namespace WordTools
         /// </summary>
         public void OnInsertPhotosClick(Office.IRibbonControl control)
         {
-            new InsertPhotosOrchestrator(Globals.Application).ShowFormAndExecuteIfConfirmed();
+            _ribbonController.OnInsertPhotosClick(Globals.Application);
         }
 
         public void Automation_ExecuteFromConfig()
@@ -194,10 +194,7 @@ namespace WordTools
         /// </summary>
         public void OnRefreshNumberingClick(Office.IRibbonControl control)
         {
-            var appContext = new Services.Adapters.WordApplicationContext(Globals.Application);
-            var notificationService = new Services.Adapters.MessageBoxNotificationService();
-            var numberingRefreshService = new Services.NumberingRefreshService(appContext, notificationService);
-            numberingRefreshService.RefreshFromCurrentSelection();
+            _ribbonController.OnRefreshNumberingClick(Globals.Application);
         }
 
         #endregion

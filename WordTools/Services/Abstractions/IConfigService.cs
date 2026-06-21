@@ -2,6 +2,8 @@ using Microsoft.Office.Interop.Word;
 
 namespace WordTools.Services.Abstractions
 {
+    /// <summary>配置持久化抽象。</summary>
+    /// <remarks>规划抽象（Phase 2）。运行时仍使用 static ConfigService，尚无 Adapter 实现。</remarks>
     public interface IConfigService
     {
         string GetLastImageHeightCM(Document doc = null);

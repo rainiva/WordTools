@@ -5,6 +5,8 @@ using System.IO;
 using System.Windows.Forms;
 using Microsoft.Office.Interop.Word;
 using WordTools.Services;
+using WordTools.Services.Abstractions;
+using WordTools.Services.Adapters;
 using Application = Microsoft.Office.Interop.Word.Application;
 using Button = System.Windows.Forms.Button;
 using CheckBox = System.Windows.Forms.CheckBox;
@@ -22,6 +24,7 @@ namespace WordTools.Forms
     public partial class InsertPhotosForm : Form
     {
         private readonly Application _application;
+        private readonly INotificationService _notificationService;
         public InsertPhotosRequest PendingRequest { get; private set; }
 
         private TextBox txtFolderPath;
@@ -53,9 +56,10 @@ namespace WordTools.Forms
             return Theme.Scale(value, dpiScale);
         }
 
-        public InsertPhotosForm(Application application)
+        public InsertPhotosForm(Application application, INotificationService notificationService = null)
         {
             _application = application;
+            _notificationService = notificationService ?? new MessageBoxNotificationService();
             InitializeComponent();
             LoadConfiguration();
         }
@@ -586,14 +590,15 @@ namespace WordTools.Forms
                 string folderPath = txtFolderPath.Text.Trim();
                 if (string.IsNullOrEmpty(folderPath))
                 {
-                    MessageBox.Show("请选择文件夹！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning("请选择文件夹！", "提示");
                     return;
                 }
 
                 if (!Directory.Exists(folderPath))
                 {
-                    MessageBox.Show("所选文件夹不存在，可能已被移动、删除，或当前不可访问。请重新选择有效文件夹。", "提示",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning(
+                        "所选文件夹不存在，可能已被移动、删除，或当前不可访问。请重新选择有效文件夹。",
+                        "提示");
                     txtFolderPath.Focus();
                     txtFolderPath.SelectAll();
                     return;
@@ -602,8 +607,7 @@ namespace WordTools.Forms
                 float minHeight;
                 if (!ImageService.ValidateAndConvertHeight(txtImageHeight.Text, out minHeight))
                 {
-                    MessageBox.Show("输入的高度无效，请输入大于 0 的数字。", "提示",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning("输入的高度无效，请输入大于 0 的数字。", "提示");
                     return;
                 }
 
@@ -638,8 +642,7 @@ namespace WordTools.Forms
             }
             catch (Exception ex)
             {
-                MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError(string.Format("操作失败: {0}", ex.Message), "错误");
             }
         }
 
@@ -669,8 +672,7 @@ namespace WordTools.Forms
                 float minHeight;
                 if (!ImageService.ValidateAndConvertHeight(txtImageHeight.Text, out minHeight))
                 {
-                    MessageBox.Show("输入的高度无效，请输入大于 0 的数字。", "提示",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _notificationService.ShowWarning("输入的高度无效，请输入大于 0 的数字。", "提示");
                     return;
                 }
 
@@ -701,8 +703,7 @@ namespace WordTools.Forms
             }
             catch (Exception ex)
             {
-                MessageBox.Show(string.Format("操作失败: {0}", ex.Message), "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _notificationService.ShowError(string.Format("操作失败: {0}", ex.Message), "错误");
             }
         }
 

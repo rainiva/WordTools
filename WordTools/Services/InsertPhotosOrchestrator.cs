@@ -13,10 +13,12 @@ namespace WordTools.Services
     public sealed class InsertPhotosOrchestrator
     {
         private readonly Word.Application _application;
+        private readonly INotificationService _notification;
 
-        public InsertPhotosOrchestrator(Word.Application application)
+        public InsertPhotosOrchestrator(Word.Application application, INotificationService notification = null)
         {
             _application = application ?? throw new ArgumentNullException(nameof(application));
+            _notification = notification ?? new MessageBoxNotificationService();
         }
 
         public void ExecuteFromAutomationConfig()
@@ -44,7 +46,7 @@ namespace WordTools.Services
             try
             {
                 InsertPhotosRequest pendingRequest = null;
-                using (var form = new InsertPhotosForm(_application))
+                using (var form = new InsertPhotosForm(_application, _notification))
                 {
                     if (form.ShowDialog() == DialogResult.OK)
                     {
@@ -66,11 +68,7 @@ namespace WordTools.Services
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "打开窗体失败: " + ex.Message,
-                    "错误",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                _notification.ShowError("打开窗体失败: " + ex.Message, "错误");
             }
         }
 
@@ -151,23 +149,19 @@ namespace WordTools.Services
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(
-                        "批量插图失败: " + ex.Message,
-                        "错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
+                    _notification.ShowError("批量插图失败: " + ex.Message, "错误");
                 }
             };
 
             timer.Start();
         }
 
-        private static InsertPhotosExecutionServices CreateDefaultServices(int totalFiles)
+        private InsertPhotosExecutionServices CreateDefaultServices(int totalFiles)
         {
             return new InsertPhotosExecutionServices
             {
                 ProgressReporter = new ProgressFormAdapter(totalFiles),
-                NotificationService = new MessageBoxNotificationService(),
+                NotificationService = _notification,
                 FailureDetailsPresenter = new FailureDetailsFormAdapter()
             };
         }

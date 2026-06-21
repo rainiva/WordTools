@@ -344,7 +344,61 @@ namespace WordTools.Tests
             Assert.True(
                 orchestratorSource.Contains("System.Windows.Forms.Timer") || orchestratorSource.Contains("new Timer"),
                 "orchestrator should defer insertion until after the modal dialog has fully closed");
-            Assert.Contains("InsertPhotosOrchestrator", addInSource);
+            string ribbonControllerPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "RibbonController.cs");
+            string ribbonControllerSource = File.ReadAllText(Path.GetFullPath(ribbonControllerPath));
+            Assert.Contains("InsertPhotosOrchestrator", ribbonControllerSource);
+            Assert.Contains("_ribbonController.OnInsertPhotosClick", addInSource);
+        }
+
+        [Fact]
+        public void ThisAddIn_ribbon_callbacks_delegate_to_ribbon_controller()
+        {
+            string addInSource = ReadProjectSource(Path.Combine("WordTools", "ThisAddIn.cs"));
+            string ribbonControllerSource = ReadProjectSource(Path.Combine("WordTools", "RibbonController.cs"));
+
+            Assert.Contains("_ribbonController.OnInsertPhotosClick", addInSource);
+            Assert.Contains("_ribbonController.OnRefreshNumberingClick", addInSource);
+            Assert.DoesNotContain("NumberingRefreshService", addInSource);
+            Assert.Contains("InsertPhotosOrchestrator", ribbonControllerSource);
+            Assert.Contains("new InsertPhotosOrchestrator", addInSource);
+        }
+
+        [Fact]
+        public void Numbering_refresh_entry_owned_by_ribbon_controller()
+        {
+            string ribbonControllerSource = ReadProjectSource(Path.Combine("WordTools", "RibbonController.cs"));
+
+            Assert.Contains("NumberingRefreshService", ribbonControllerSource);
+            Assert.Contains("RefreshFromCurrentSelection", ribbonControllerSource);
+        }
+
+        [Fact]
+        public void InsertPhotosOrchestrator_does_not_call_message_box_directly()
+        {
+            string source = ReadProjectSource(Path.Combine("WordTools", "Services", "InsertPhotosOrchestrator.cs"));
+            Assert.DoesNotContain("MessageBox.Show", source);
+        }
+
+        [Fact]
+        public void RibbonController_does_not_call_message_box_directly()
+        {
+            string source = ReadProjectSource(Path.Combine("WordTools", "RibbonController.cs"));
+            Assert.DoesNotContain("MessageBox.Show", source);
+        }
+
+        [Fact]
+        public void InsertPhotosForm_does_not_call_message_box_directly()
+        {
+            string source = ReadProjectSource(Path.Combine("WordTools", "Forms", "InsertPhotosForm.cs"));
+            Assert.DoesNotContain("MessageBox.Show", source);
+        }
+
+        [Fact]
+        public void Static_config_service_has_no_instance_adapter_yet()
+        {
+            string adaptersDir = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "WordTools", "Services", "Adapters");
+            string adapterPath = Path.GetFullPath(Path.Combine(adaptersDir, "ConfigServiceAdapter.cs"));
+            Assert.False(File.Exists(adapterPath), "IConfigService adapter is not part of this convergence pass.");
         }
 
         [Fact]

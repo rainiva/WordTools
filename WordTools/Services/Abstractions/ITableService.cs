@@ -7,6 +7,7 @@ namespace WordTools.Services.Abstractions
     /// 表格结构操作抽象接口
     /// 包含表格验证、单元格可用性检查、行列操作等结构相关方法
     /// </summary>
+    /// <remarks>规划抽象（Phase 2）。运行时仍使用 static TableService，尚无 Adapter 实现。</remarks>
     public interface ITableService
     {
         // 表格验证

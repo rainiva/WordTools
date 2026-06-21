@@ -1,13 +1,16 @@
 using System;
-using System.Windows.Forms;
 using Office = Microsoft.Office.Core;
+using Word = Microsoft.Office.Interop.Word;
 using WordTools.Services;
+using WordTools.Services.Abstractions;
+using WordTools.Services.Adapters;
 
 namespace WordTools
 {
     public class RibbonController
     {
         private Office.IRibbonUI _ribbonUI;
+        private readonly INotificationService _notification = new MessageBoxNotificationService();
 
         public void OnRibbonLoad(Office.IRibbonUI ribbonUI)
         {
@@ -49,8 +52,19 @@ namespace WordTools
                 "性能基准 CSV：" + (state.BenchmarkLoggingEnabled ? "已开启" : "已关闭") + "\n\n" +
                 "提示：点击右侧下拉箭头可以直接调整这两项设置。";
 
-            MessageBox.Show(message, "日志设置",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _notification.ShowInformation(message, "日志设置");
+        }
+
+        public void OnInsertPhotosClick(Word.Application application)
+        {
+            new InsertPhotosOrchestrator(application).ShowFormAndExecuteIfConfirmed();
+        }
+
+        public void OnRefreshNumberingClick(Word.Application application)
+        {
+            var appContext = new WordApplicationContext(application);
+            var numberingRefreshService = new NumberingRefreshService(appContext, _notification);
+            numberingRefreshService.RefreshFromCurrentSelection();
         }
 
         public void OnToggleDetailedLogging(Office.IRibbonControl control, bool pressed)
@@ -73,8 +87,7 @@ namespace WordTools
 
         public void OnAboutClick(Office.IRibbonControl control)
         {
-            MessageBox.Show(AppVersionInfo.AboutMessage, "关于",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _notification.ShowInformation(AppVersionInfo.AboutMessage, "关于");
         }
     }
 }
